@@ -1,6 +1,6 @@
 /*
  *  Advanced Programming Course Assignment 1
- *  Shell Header File
+ *  Shell internal commands Header File
  *  Copyright (C) 2024  Roy Simanovich and Almog Shor
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -16,24 +16,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#ifndef _SHELL_H
-#define _SHELL_H
+#ifndef _SHELL_CD_H
+#define _SHELL_CD_H
 
-/********************/
-/* Includes Section */
-/********************/
-#include "shell_internal_cmds.h"
-
-
-/*
- * @brief Parse a command into arguments.
- * @param command The command to parse.
- * @param argv The array of arguments.
- * @return 0 if it an internal command, 1 if it is an external command.
- * @note This function will modify the argv array.
- * @note This function will execute internal commands.
-*/
-CommandType parse_command(char* command, char** argv);
+#include "shell_def.h"
 
 /*
  * @brief Execute change directory command.
@@ -45,19 +31,9 @@ CommandType parse_command(char* command, char** argv);
 Result cmdCD(char *path, int argc);
 
 /*
- * @brief Execute a command.
- * @param argv The array of arguments.
- * @return void (nothing).
- */
-void execute_command(char** argv);
-
-
-/*
- * @brief A signal handler for the shell program.
- * @param signum The signal number.
- * @noreturn
+ * @brief Execute print working directory command.
+ * @return Success always.
 */
-void shell_sig_handler(int signum);
+Result cmdPWD();
 
-
-#endif /* _SHELL_H */
+#endif /* _SHELL_CD_H */

@@ -30,7 +30,7 @@ HEADERS = $(wildcard $(INCLUDE_PATH)/*.h)
 OBJECTS = $(subst sources/,objects/,$(subst .c,.o,$(SOURCES)))
 
 # Variables for the client and server object files.
-OBJECTS_F = shell.o
+OBJECTS_F = myshell.o shell_internal_cmds.o
 
 # Variables for the object files.
 OBJ_FILES = $(addprefix $(OBJECT_PATH)/, $(OBJECTS_F))
@@ -39,7 +39,7 @@ OBJ_FILES = $(addprefix $(OBJECT_PATH)/, $(OBJECTS_F))
 .PHONY: all default clean
 
 # Default target - compile everything and create the executables and libraries.
-all: shell
+all: myshell
 
 # Alias for the default target.
 default: all
@@ -50,7 +50,7 @@ default: all
 ############
 
 # Compile the shell program.
-shell: $(OBJ_FILES)
+myshell: $(OBJ_FILES)
 	$(CC) $(CFLAGS) -o $@ $^
 
 
@@ -69,4 +69,4 @@ $(OBJECT_PATH)/%.o: $(SOURCE_PATH)/%.c $(HEADERS)
 
 # Remove all the object files, shared libraries and executables.
 clean:
-	$(RM) $(OBJECT_PATH)/*.o *.so shell
+	$(RM) $(OBJECT_PATH)/*.o *.so myshell
