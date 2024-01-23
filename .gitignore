@@ -54,3 +54,6 @@ dkms.conf
 
 # VScode files
 .vscode/*
+
+# idea files
+.idea
