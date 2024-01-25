@@ -14,7 +14,7 @@
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #ifndef _SHELL_CD_H
 #define _SHELL_CD_H
@@ -27,13 +27,19 @@
  * @param argc The number of arguments.
  * @return Success if the command succeeded, Failure otherwise.
  * @note number of arguments must be 1.
-*/
+ */
 Result cmdCD(char *path, int argc);
 
 /*
  * @brief Execute print working directory command.
  * @return Success always.
-*/
+ */
 Result cmdPWD();
+
+/*
+ * @brief Execute clear command.
+ * @return Success always.
+ */
+Result cmdClear();
 
 #endif /* _SHELL_CD_H */

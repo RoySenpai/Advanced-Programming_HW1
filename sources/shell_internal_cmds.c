@@ -56,13 +56,13 @@ Result cmdCD(char *path, int argc) {
 			if (strcmp(workingdir, "") == 0)
 				return Success;
 
-			getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
-
 			if (chdir(workingdir) == -1)
 			{
 				perror("Internal error: System call faliure: chdir(2)");
 				return Failure;
 			}
+
+			getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
 
 			return Success;
 		}
@@ -93,5 +93,11 @@ Result cmdCD(char *path, int argc) {
 
 Result cmdPWD() {
 	fprintf(stdout, "%s\n", cwd);
+	return Success;
+}
+
+Result cmdClear() {
+	// Write the clear screen command to the standard output.
+	write(STDOUT_FILENO, SHELL_CMD_CLEAR_FLUSH, SHELL_CMD_CLEAR_FLUSH_LEN);
 	return Success;
 }

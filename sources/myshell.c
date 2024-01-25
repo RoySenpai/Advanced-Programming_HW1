@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <signal.h>
 #include <unistd.h>
 
@@ -29,6 +30,9 @@ char *workingdir = NULL;
 char *curr_prompt = NULL;
 
 int main() {
+	// Command buffer
+	char command[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
+
 	// Get home directory
 	homedir = getenv("HOME");
 
@@ -38,8 +42,17 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
-	// Handle SIGINT
-	signal(SIGINT, shell_sig_handler);
+	// Handle SIGINT. We use sigaction(2) instead of signal(2) because it's more portable and reliable.
+	struct sigaction sa;
+	sa.sa_handler = shell_sig_handler;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+	
+	if(sigaction(SIGINT, &sa, NULL) == -1)
+	{
+		perror("Internal error: System call faliure: sigaction(2)");
+		return EXIT_FAILURE;
+	}
 
 	// Allocate memory
 	cwd = (char *)calloc((SHELL_MAX_PATH_LENGTH + 1), sizeof(char));
@@ -53,11 +66,60 @@ int main() {
 	}
 
 	strcpy(curr_prompt, SHELL_DEFAULT_PROMPT);
+	getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
 
 	while (1)
 	{
+		// Get current working directory
+		getcwd(cwd, SHELL_MAX_PATH_LENGTH);
+
+		// Print prompt
 		fprintf(stdout, "%s: ", curr_prompt);
 		fflush(stdout);
+
+		// Read command from user
+		fgets(command, SHELL_MAX_COMMAND_LENGTH, stdin);
+
+		// Remove trailing newline
+		command[strcspn(command, "\n")] = 0;
+
+		// Check if command is empty
+		if (strlen(command) == 0)
+			continue;
+
+		// Pass command to shell internal command handler
+		/* TODO */
+
+		if (strcmp(command, "clear") == 0)
+		{
+			cmdClear();
+			continue;
+		}
+
+		else if (strcmp(command, "pwd") == 0)
+		{
+			cmdPWD();
+			continue;
+		}
+
+		else if (strcmp(command, "exit") == 0)
+			break;
+
+		else if (strncmp(command, "cd", 2) == 0)
+		{
+			char *path = strtok(command, " ");
+			path = strtok(NULL, " ");
+
+			if (path == NULL)
+				fprintf(stderr, "Shell internal error: cd: No path specified.\n");
+			else
+				cmdCD(path, 2);
+
+			continue;
+		}
+
+		// Reset stdin buffer
+		bzero(command, SHELL_MAX_PATH_LENGTH + 1);
 	}
 
 	// Memory cleanup
@@ -69,10 +131,9 @@ int main() {
 }
 
 void shell_sig_handler(int signum) {
-	if (signum == SIGINT)
+	if (signum == SIGINT || signum == SIGQUIT)
 	{
-		fprintf(stdout, "You typed Control-C!\n");
-		fprintf(stdout, "%s: ", curr_prompt);
+		fprintf(stdout, "\33[2K\rYou typed Control-C!\n");
 		fflush(stdout);
 	}
 }

@@ -14,7 +14,7 @@
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #ifndef _SHELL_H
 #define _SHELL_H
@@ -25,6 +25,10 @@
 #include "shell_internal_cmds.h"
 
 
+/*********************/
+/* Functions Section */
+/*********************/
+
 /*
  * @brief Parse a command into arguments.
  * @param command The command to parse.
@@ -32,8 +36,8 @@
  * @return 0 if it an internal command, 1 if it is an external command.
  * @note This function will modify the argv array.
  * @note This function will execute internal commands.
-*/
-CommandType parse_command(char* command, char** argv);
+ */
+CommandType parse_command(char *command, char **argv);
 
 /*
  * @brief Execute change directory command.
@@ -41,7 +45,7 @@ CommandType parse_command(char* command, char** argv);
  * @param argc The number of arguments.
  * @return Success if the command succeeded, Failure otherwise.
  * @note number of arguments must be 1.
-*/
+ */
 Result cmdCD(char *path, int argc);
 
 /*
@@ -49,15 +53,13 @@ Result cmdCD(char *path, int argc);
  * @param argv The array of arguments.
  * @return void (nothing).
  */
-void execute_command(char** argv);
-
+void execute_command(char **argv);
 
 /*
  * @brief A signal handler for the shell program.
  * @param signum The signal number.
  * @noreturn
-*/
+ */
 void shell_sig_handler(int signum);
-
 
 #endif /* _SHELL_H */
