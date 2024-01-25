@@ -37,7 +37,7 @@
  * @note This function will modify the argv array.
  * @note This function will execute internal commands.
  */
-CommandType parse_command(char *command, char **argv);
+CommandType parse_command(char *command, char ***argv);
 
 /*
  * @brief Execute change directory command.
@@ -61,5 +61,11 @@ void execute_command(char **argv);
  * @noreturn
  */
 void shell_sig_handler(int signum);
+
+/*
+ * @brief A cleanup routine for the shell program.
+ * @noreturn
+ */
+void shell_cleanup();
 
 #endif /* _SHELL_H */
