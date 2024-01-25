@@ -24,6 +24,7 @@
 extern char *homedir;
 extern char *cwd;
 extern char *workingdir;
+extern char *curr_prompt;
 
 Result cmdCD(char *path, int argc) {
 	// Only one argument is allowed, like in the original shell.
@@ -99,5 +100,22 @@ Result cmdPWD() {
 Result cmdClear() {
 	// Write the clear screen command to the standard output.
 	write(STDOUT_FILENO, SHELL_CMD_CLEAR_FLUSH, SHELL_CMD_CLEAR_FLUSH_LEN);
+	return Success;
+}
+
+Result cmdChangePrompt(char *new_prompt) {
+	if (new_prompt == NULL)
+	{
+		fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
+		return Failure;
+	}
+	
+	if (strlen(new_prompt) > SHELL_MAX_PATH_LENGTH)
+	{
+		fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_LONG);
+		return Failure;
+	}
+	
+	strcpy(curr_prompt, new_prompt);
 	return Success;
 }

@@ -26,7 +26,7 @@
  * @param path The path to change to.
  * @param argc The number of arguments.
  * @return Success if the command succeeded, Failure otherwise.
- * @note number of arguments must be 1.
+ * @note number of arguments must be 2.
  */
 Result cmdCD(char *path, int argc);
 
@@ -41,5 +41,12 @@ Result cmdPWD();
  * @return Success always.
  */
 Result cmdClear();
+
+/*
+ * @brief Execute change prompt command.
+ * @param new_prompt The new prompt.
+ * @return Success if the command succeeded, Failure otherwise.
+ */
+Result cmdChangePrompt(char *new_prompt);
 
 #endif /* _SHELL_CD_H */

@@ -25,14 +25,25 @@
 #include <signal.h>
 #include <unistd.h>
 
+// Global variables
+
+// Home directory
 char *homedir = NULL;
+
+// Current working directory
 char *cwd = NULL;
+
+// Previous working directory
 char *workingdir = NULL;
+
+// Current prompt (default is SHELL_DEFAULT_PROMPT).
 char *curr_prompt = NULL;
 
 int main() {
 	// Command buffer
 	char command[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
+
+	// Arguments array
 	char **argv = NULL;
 
 	// Get home directory
@@ -56,7 +67,7 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
-	// Allocate memory
+	// Allocate memory for the current working directory, the working directory and the current prompt.
 	cwd = (char *)calloc((SHELL_MAX_PATH_LENGTH + 1), sizeof(char));
 	workingdir = (char *)calloc((SHELL_MAX_PATH_LENGTH + 1), sizeof(char));
 	curr_prompt = (char *)calloc((SHELL_MAX_PATH_LENGTH + 1), sizeof(char));
@@ -67,8 +78,8 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
+	// Set the prompt to the default one.
 	strcpy(curr_prompt, SHELL_DEFAULT_PROMPT);
-	getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
 
 	while (1)
 	{
@@ -176,6 +187,32 @@ CommandType parse_command(char *command, char ***argv) {
 	else if (strcmp(token, SHELL_CMD_PWD) == 0)
 	{
 		cmdPWD();
+		return Internal;
+	}
+
+	// Change prompt command.
+	else if (strcmp(token, SHELL_CMD_CHANGE_PROMPT) == 0)
+	{
+		// Check if the number of arguments is correct.
+		if (words != 3)
+		{
+			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
+			return Internal;
+		}
+
+		token = strtok(NULL, " ");
+
+		// Check if the syntax is correct.
+		if (strcmp(token, "=") != 0)
+		{
+			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
+			return Internal;
+		}
+
+		// Extract the new prompt and pass it to the command.
+		token = strtok(NULL, " ");
+
+		cmdChangePrompt(token);
 		return Internal;
 	}
 

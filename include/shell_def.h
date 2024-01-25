@@ -83,6 +83,13 @@
  */
 #define SHELL_CMD_GNU "gnu"
 
+/*
+ * @brief Alias for the change prompt command.
+ * @note Used to indicate that the user wants to change the prompt.
+ * @note This an internal command required by the assignment.
+ */
+#define SHELL_CMD_CHANGE_PROMPT "prompt"
+
 /**********************/
 /* Clean screen stuff */
 /**********************/
@@ -144,6 +151,19 @@
  * @note Used to indicate that the used provided too many arguments to the cd command.
  */
 #define SHELL_ERR_CMD_CD_ARG "cd: Too many arguments provided"
+
+/*
+ * @brief Change prompt error message: syntax error.
+ * @note Used to indicate that the a syntax error occurred while parsing the change prompt command.
+ */
+#define SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX "Shell internal error: Syntax error in prompt change command"
+
+/*
+ * @brief Change prompt error message: new prompt is too long.
+ * @note Used to indicate that the new prompt is too long.
+ */
+#define SHELL_ERR_CMD_CHANGE_PROMPT_LONG "Shell internal error: New prompt is too long"
+
 
 /*******************/
 /* Program details */
