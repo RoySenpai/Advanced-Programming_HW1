@@ -24,6 +24,8 @@
 #include <strings.h>
 #include <signal.h>
 #include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
 
 // Global variables
 
@@ -68,6 +70,7 @@ int main() {
 	}
 
 	// Allocate memory for the current working directory, the working directory and the current prompt.
+	// Size is SHELL_MAX_PATH_LENGTH + 1 to allow for the null terminator.
 	cwd = (char *)calloc((SHELL_MAX_PATH_LENGTH + 1), sizeof(char));
 	workingdir = (char *)calloc((SHELL_MAX_PATH_LENGTH + 1), sizeof(char));
 	curr_prompt = (char *)calloc((SHELL_MAX_PATH_LENGTH + 1), sizeof(char));
@@ -98,7 +101,7 @@ int main() {
 			continue;
 
 		// Execute command
-		//execute_command(argv);
+		execute_command(argv);
 
 		// Free the memory allocated for the arguments array.
 		for (size_t k = 0; *(argv + k) != NULL; ++k)
@@ -117,7 +120,7 @@ int main() {
 }
 
 void shell_sig_handler(int signum) {
-	if (signum == SIGINT || signum == SIGQUIT)
+	if (signum == SIGINT)
 	{
 		fprintf(stdout, "\33[2K\rYou typed Control-C!\n");
 		fflush(stdout);
@@ -290,4 +293,115 @@ CommandType parse_command(char *command, char ***argv) {
 
 	// This is an external command.
 	return External;
+}
+
+void execute_command(char **argv) {
+	pid_t pid;
+	int status = 0, i = 0, num_pipes = 0;
+	bool redirect = false;
+	char ***pipes = NULL;
+
+	// Count the number of pipes and check if there are any redirections.
+	while (*(argv + i) != NULL)
+	{
+		if (strcmp(*(argv + i), "|") == 0)
+			++num_pipes;
+
+		else if (strcmp(*(argv + i), ">") == 0 || strcmp(*(argv + i), ">>") == 0 || strcmp(*(argv + i), "<") == 0)
+			redirect = true;
+
+		++i;
+	}
+
+	if (num_pipes > 0)
+	{
+		// Allocate memory for the pipes array.
+		pipes = (char ***)calloc(num_pipes, sizeof(char **));
+
+		if (pipes == NULL)
+		{
+			perror("Internal error: System call faliure: calloc(3)");
+			shell_cleanup();
+			exit(EXIT_FAILURE);
+		}
+
+		// Allocate memory for each pipe.
+		for (int k = 0; k < num_pipes; ++k)
+		{
+			*(pipes + k) = (char **)calloc(i, sizeof(char *));
+
+			if (*(pipes + k) == NULL)
+			{
+				perror("Internal error: System call faliure: calloc(3)");
+				shell_cleanup();
+				exit(EXIT_FAILURE);
+			}
+		}
+
+		// Parse the command into pipes.
+		i = 0;
+
+		for (int k = 0; *(argv + k) != NULL; ++k)
+		{
+			if (strcmp(*(argv + k), "|") == 0)
+			{
+				++i;
+				continue;
+			}
+
+			*(*(pipes + i) + k) = *(argv + k);
+		}
+	}
+
+	// Case 1: No pipes, no redirections.
+	else if (!redirect)
+	{
+		// Fork the process.
+		pid = fork();
+
+		if (pid == -1)
+		{
+			perror("Internal error: System call faliure: fork(2)");
+			shell_cleanup();
+			exit(EXIT_FAILURE);
+		}
+
+		// Child process.
+		else if (pid == 0)
+		{
+			// Reset SIGINT to default.
+			signal(SIGINT, SIG_DFL);
+
+			// Execute the command.
+			if (execvp(*argv, argv) == -1)
+			{
+				perror("Internal error: System call faliure: execvp(3)");
+				shell_cleanup();
+				exit(EXIT_FAILURE);
+			}
+		}
+
+		// Parent process.
+		else
+		{
+			// Wait for the child process to finish.
+			wait(&status);
+
+			int high_8, low_7, bit_7;
+			high_8 = status >> 8;
+			low_7 = status & 0x7F;
+			bit_7 = status & 0x80;
+
+			fprintf(stdout, "status: exit=%d, sig=%d, core=%d\n", high_8, low_7, bit_7); 
+		}
+	}
+
+	// Memory cleanup.
+	if (pipes != NULL)
+	{
+		for (int k = 0; k < num_pipes; ++k)
+			free(*(pipes + k));
+
+		free(pipes);
+	}
 }
