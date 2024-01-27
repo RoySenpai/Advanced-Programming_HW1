@@ -28,97 +28,84 @@ extern char *workingdir;
 extern char *curr_prompt;
 
 Result cmdCD(char *path, int argc) {
-	// Only one argument is allowed, like in the original shell.
-	if (argc > 2)
-	{
-		fprintf(stderr, "%s\n", SHELL_ERR_CMD_CD_ARG);
-		return Failure;
-	}
+    // Only one argument is allowed, like in the original shell.
+    if (argc > 2) {
+        fprintf(stderr, "%s\n", SHELL_ERR_CMD_CD_ARG);
+        return Failure;
+    } else if (argc == 2) {
+        // Home directory.
+        if (strcmp(path, "~") == 0) {
+            // Save current working directory before changing it.
+            getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
 
-	else if (argc == 2)
-	{
-		// Home directory.
-		if (strcmp(path, "~") == 0)
-		{
-			// Save current working directory before changing it.
-			getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
+            if (chdir(homedir) == -1) {
+                perror("Internal error: System call faliure: chdir(2)");
+                return Failure;
+            }
 
-			if (chdir(homedir) == -1)
-			{
-				perror("Internal error: System call faliure: chdir(2)");
-				return Failure;
-			}
+            return Success;
+        }
 
-			return Success;
-		}
+            // Previous directory.
+        else if (strcmp(path, "-") == 0) {
+            if (strcmp(workingdir, "") == 0)
+                return Success;
 
-		// Previous directory.
-		else if (strcmp(path, "-") == 0)
-		{
-			if (strcmp(workingdir, "") == 0)
-				return Success;
+            if (chdir(workingdir) == -1) {
+                perror("Internal error: System call faliure: chdir(2)");
+                return Failure;
+            }
 
-			if (chdir(workingdir) == -1)
-			{
-				perror("Internal error: System call faliure: chdir(2)");
-				return Failure;
-			}
+            getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
 
-			getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
+            return Success;
+        }
 
-			return Success;
-		}
+        getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
 
-		getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
+        if (chdir(path) == -1) {
+            fprintf(stderr, "%s\n", SHELL_ERR_CMD_CD);
+            return Failure;
+        }
+    }
 
-		if (chdir(path) == -1)
-		{
-			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CD);
-			return Failure;
-		}
-	}
+        // No arguments - go to home directory.
+    else {
+        getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
 
-	// No arguments - go to home directory.
-	else
-	{
-		getcwd(workingdir, SHELL_MAX_PATH_LENGTH);
+        if (chdir(homedir) == -1) {
+            perror("Internal error: System call faliure: chdir(2)");
+            return Failure;
+        }
+    }
 
-		if (chdir(homedir) == -1)
-		{
-			perror("Internal error: System call faliure: chdir(2)");
-			return Failure;
-		}
-	}
-
-	return Success;
+    return Success;
 }
 
 Result cmdPWD() {
-	fprintf(stdout, "%s\n", cwd);
-	return Success;
+    fprintf(stdout, "%s\n", cwd);
+    return Success;
 }
 
 Result cmdClear() {
-	// Write the clear screen command to the standard output.
-	write(STDOUT_FILENO, SHELL_CMD_CLEAR_FLUSH, SHELL_CMD_CLEAR_FLUSH_LEN);
-	return Success;
+    // Write the clear screen command to the standard output.
+    write(STDOUT_FILENO, SHELL_CMD_CLEAR_FLUSH, SHELL_CMD_CLEAR_FLUSH_LEN);
+    return Success;
 }
 
 Result cmdChangePrompt(char *new_prompt) {
-	if (new_prompt == NULL)
-	{
-		fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
-		return Failure;
-	}
-	
-	if (strlen(new_prompt) > SHELL_MAX_PATH_LENGTH)
-	{
-		fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_LONG);
-		return Failure;
-	}
-	
-	strcpy(curr_prompt, new_prompt);
-	return Success;
+    if (new_prompt == NULL) {
+        fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
+        return Failure;
+    }
+
+    if (strlen(new_prompt) > SHELL_MAX_PATH_LENGTH) {
+        fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_LONG);
+        return Failure;
+    }
+
+    strcpy(curr_prompt, new_prompt);
+    return Success;
 }
 
 extern int last_status;  // Assuming you store the last command status in this global variable.
@@ -163,3 +150,11 @@ Result cmdEcho(char **args, int argc) {
     return Success;
 }
 
+Result repeatLastCommand(char *lastCommand) {
+    if (lastCommand == NULL || strlen(lastCommand) == 0) {
+        fprintf(stderr, "No command to repeat.\n");
+        return Failure;
+    }
+    //@TODO: help from Roy how to handle it - do we want to send it back to parse_command? or do we want to use system()?
+    return Success;
+}
