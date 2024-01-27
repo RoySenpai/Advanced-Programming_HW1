@@ -78,6 +78,6 @@ Result setVariable(char *name, char *value);
  * @param - variableName The name of the variable.
  * @return - Success if the command succeeded, Failure otherwise.
  */
-Result cmdRead(char *variableName)
+Result cmdRead(char *variableName);
 
 #endif /* _SHELL_CD_H */
