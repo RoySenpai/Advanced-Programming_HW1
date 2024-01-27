@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 extern char *homedir;
 extern char *cwd;
@@ -118,4 +119,46 @@ Result cmdChangePrompt(char *new_prompt) {
 	
 	strcpy(curr_prompt, new_prompt);
 	return Success;
+}
+
+extern int last_status;  // Assuming you store the last command status in this global variable.
+// @TODO: help from Roy how to handle it
+
+
+Result cmdEcho(char **args, int argc) {
+    bool redirect = false;
+    FILE *fp = stdout;  // Default output to stdout.
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(args[i], ">") == 0 || strcmp(args[i], ">>") == 0) {
+            // Handle redirection
+            redirect = true;
+            const char *mode = (strcmp(args[i], ">") == 0) ? "w" : "a";
+            if (++i < argc) {
+                fp = fopen(args[i], mode);
+                if (!fp) {
+                    perror("fopen");
+                    return Failure;
+                }
+            } else {
+                fprintf(stderr, "Missing file name for redirection.\n");
+                return Failure;
+            }
+            break;  // Stop processing further arguments after redirection.
+        } else if (strcmp(args[i], "$?") == 0) {
+            // Print the status of the last executed command.
+            fprintf(fp, "%d ", last_status);
+        } else {
+            // Print the argument.
+            fprintf(fp, "%s ", args[i]);
+        }
+    }
+
+    if (!redirect) {
+        fprintf(fp, "\n");  // Add a newline if outputting to stdout.
+    } else if (fp != stdout) {
+        fclose(fp);  // Close the file if we opened one for redirection.
+    }
+
+    return Success;
 }
