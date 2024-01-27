@@ -49,4 +49,13 @@ Result cmdClear();
  */
 Result cmdChangePrompt(char *new_prompt);
 
+/*
+ * @brief - Execute echo command.
+ * @param - args The arguments array.
+ * @param - argc The number of arguments.
+ * @return - Success if the command succeeded, Failure otherwise.
+ */
+Result cmdEcho(char **args, int argc);
+
+
 #endif /* _SHELL_CD_H */
