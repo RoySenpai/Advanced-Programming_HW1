@@ -64,5 +64,20 @@ Result cmdEcho(char **args, int argc);
  */
 Result repeatLastCommand(char *lastCommand);
 
+//TODO: Roy you should make sure you understand what is going on here.
+/*
+ * @brief - Execute set variable command.
+ * @param - name The name of the variable.
+ * @param - value The value of the variable.
+ * @return - Success if the command succeeded, Failure otherwise.
+ */
+Result setVariable(char *name, char *value);
+
+/*
+ * @brief - Execute read variable command.
+ * @param - variableName The name of the variable.
+ * @return - Success if the command succeeded, Failure otherwise.
+ */
+Result cmdRead(char *variableName)
 
 #endif /* _SHELL_CD_H */

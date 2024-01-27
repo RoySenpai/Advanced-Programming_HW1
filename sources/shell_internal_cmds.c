@@ -27,6 +27,17 @@ extern char *cwd;
 extern char *workingdir;
 extern char *curr_prompt;
 
+// @TODO: Roy you should read and modify these variables in your prespective.
+#define MAX_VARIABLES 100
+#define MAX_VARIABLE_NAME_LENGTH 50
+#define MAX_VARIABLE_VALUE_LENGTH 100
+
+extern char variableNames[MAX_VARIABLES][MAX_VARIABLE_NAME_LENGTH];
+extern char variableValues[MAX_VARIABLES][MAX_VARIABLE_VALUE_LENGTH];
+extern int variableCount;
+
+//end of Todo variables
+
 Result cmdCD(char *path, int argc) {
     // Only one argument is allowed, like in the original shell.
     if (argc > 2) {
@@ -157,4 +168,39 @@ Result repeatLastCommand(char *lastCommand) {
     }
     //@TODO: help from Roy how to handle it - do we want to send it back to parse_command? or do we want to use system()?
     return Success;
+}
+
+Result setVariable(char *name, char *value) {
+    if (variableCount >= MAX_VARIABLES) {
+        fprintf(stderr, "Maximum number of variables reached.\n");
+        return Failure;
+    }
+
+    // Check if the variable already exists
+    for (int i = 0; i < variableCount; i++) {
+        if (strcmp(variableNames[i], name) == 0) {
+            strncpy(variableValues[i], value, MAX_VARIABLE_VALUE_LENGTH);
+            return Success;
+        }
+    }
+
+    // Add a new variable
+    strncpy(variableNames[variableCount], name, MAX_VARIABLE_NAME_LENGTH);
+    strncpy(variableValues[variableCount], value, MAX_VARIABLE_VALUE_LENGTH);
+    variableCount++;
+
+    return Success;
+}
+
+//@TODO: Do we need now to modify the echo command to print the variables? or do we want to do it in the parse_command?
+Result cmdRead(char *variableName) {
+    char input[MAX_VARIABLE_VALUE_LENGTH];
+    if (fgets(input, sizeof(input), stdin) == NULL) {
+        return Failure;  // Error or end-of-file
+    }
+
+    // Remove newline character
+    input[strcspn(input, "\n")] = 0;
+
+    return setVariable(variableName, input);
 }
