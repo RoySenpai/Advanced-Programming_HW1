@@ -78,17 +78,32 @@
 #define SHELL_CMD_HISTORY "history"
 
 /*
- * @brief Print the license of the shell.
- * @note This is a custom made command and is not part of the assignment.
- */
-#define SHELL_CMD_GNU "gnu"
-
-/*
  * @brief Alias for the change prompt command.
  * @note Used to indicate that the user wants to change the prompt.
  * @note This an internal command required by the assignment.
  */
 #define SHELL_CMD_CHANGE_PROMPT "prompt"
+
+/*
+ * @brief Alias for the last status command.
+ * @note Used to indicate that the user wants to print the last status.
+ * @note This an internal command required by the assignment.
+ */
+#define SHELL_CMD_LAST_STATUS "?"
+
+/*
+ * @brief Alias for the last command command.
+ * @note Used to indicate that the user wants to execute the last command again.
+ * @note This an internal command required by the assignment.
+ */
+#define SHELL_CMD_REPEATED "!!"
+
+/*
+ * @brief Alias for reading a variable from stdin.
+ * @note Used to indicate that the user wants to read a variable from stdin.
+ * @note This an internal command required by the assignment.
+ */
+#define SHELL_CMD_READ "read"
 
 /**********************/
 /* Clean screen stuff */
@@ -164,6 +179,11 @@
  */
 #define SHELL_ERR_CMD_CHANGE_PROMPT_LONG "Shell internal error: New prompt is too long"
 
+/*
+ * @brief Syntax error message for the variable set command.
+ * @note Used to indicate that the a syntax error occurred while setting a variable.
+ */
+#define SHELL_ERR_CMD_SET_SYNTAX "Shell internal error: Syntax error in set command"
 
 /*******************/
 /* Program details */

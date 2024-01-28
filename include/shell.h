@@ -22,6 +22,8 @@
 /********************/
 /* Includes Section */
 /********************/
+
+#include "shell_utils.h"
 #include "shell_internal_cmds.h"
 
 
@@ -67,5 +69,11 @@ void shell_sig_handler(int signum);
  * @noreturn
  */
 void shell_cleanup();
+
+/*
+ * @brief Update the status of the last command.
+ * @param status The new status.
+ */
+void update_laststatus(int status);
 
 #endif /* _SHELL_H */

@@ -19,7 +19,30 @@
 #ifndef _SHELL_CD_H
 #define _SHELL_CD_H
 
+/********************/
+/* Includes Section */
+/********************/
 #include "shell_def.h"
+#include "Command.h"
+#include "Variables.h"
+#include "LinkedList.h"
+#include <stdbool.h>
+
+/********************/
+/* External Section */
+/********************/
+extern char *homedir;
+extern char *cwd;
+extern char *workingdir;
+extern char *curr_prompt;
+
+extern PLinkedList commandHistory;
+extern PLinkedList variableList;
+
+
+/*********************/
+/* Functions Section */
+/*********************/
 
 /*
  * @brief Execute change directory command.
@@ -50,34 +73,33 @@ Result cmdClear();
 Result cmdChangePrompt(char *new_prompt);
 
 /*
- * @brief - Execute echo command.
- * @param - args The arguments array.
- * @param - argc The number of arguments.
- * @return - Success if the command succeeded, Failure otherwise.
+ * @brief Execute last command.
+ * @param lastCommand The last command.
+ * @return Success if the command succeeded, Failure otherwise.
  */
-Result cmdEcho(char **args, int argc);
-
-/*
- * @brief - Execute last command.
- * @param - lastCommand The last command.
- * @return - Success if the command succeeded, Failure otherwise.
- */
-Result repeatLastCommand(char *lastCommand);
+Result cmdrepeatLastCommand(char *lastCommand);
 
 //TODO: Roy you should make sure you understand what is going on here.
 /*
- * @brief - Execute set variable command.
- * @param - name The name of the variable.
- * @param - value The value of the variable.
- * @return - Success if the command succeeded, Failure otherwise.
+ * @brief Execute set variable command.
+ * @param name The name of the variable.
+ * @param value The value of the variable.
+ * @return Success if the command succeeded, Failure otherwise.
  */
 Result setVariable(char *name, char *value);
 
 /*
- * @brief - Execute read variable command.
- * @param - variableName The name of the variable.
- * @return - Success if the command succeeded, Failure otherwise.
+ * @brief Execute read variable command.
+ * @param variableName The name of the variable.
+ * @return Success if the command succeeded, Failure otherwise.
  */
 Result cmdRead(char *variableName);
+
+/*
+ * @brief Execute history command.
+ * @param argc The number of arguments.
+ * @return Success if the command succeeded, Failure otherwise.
+ */
+Result cmdHistory(int argc);
 
 #endif /* _SHELL_CD_H */

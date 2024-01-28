@@ -29,10 +29,8 @@ SOURCES = $(wildcard $(SOURCE_PATH)/*.c)
 HEADERS = $(wildcard $(INCLUDE_PATH)/*.h)
 OBJECTS = $(subst sources/,objects/,$(subst .c,.o,$(SOURCES)))
 
-# Variables for the client and server object files.
-OBJECTS_F = myshell.o shell_internal_cmds.o
-
-# Variables for the object files.
+# Variable for the object files.
+OBJECTS_F = myshell.o shell_internal_cmds.o shell_utils.o LinkedList.o Command.o Variables.o
 OBJ_FILES = $(addprefix $(OBJECT_PATH)/, $(OBJECTS_F))
 
 # Phony targets - targets that are not files but commands to be executed by make.

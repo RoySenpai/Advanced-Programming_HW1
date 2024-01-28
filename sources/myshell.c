@@ -27,7 +27,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
-// Global variables
+// Global variables section
 
 // Home directory
 char *homedir = NULL;
@@ -41,6 +41,14 @@ char *workingdir = NULL;
 // Current prompt (default is SHELL_DEFAULT_PROMPT).
 char *curr_prompt = NULL;
 
+// Command history
+PLinkedList commandHistory;
+
+// Variable list
+PLinkedList variableList;
+
+
+// Main function section
 int main() {
 	// Command buffer
 	char command[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
@@ -79,6 +87,22 @@ int main() {
 	{
 		perror("Internal error: System call faliure: calloc(3)");
 		return EXIT_FAILURE;
+	}
+
+	commandHistory = createLinkedList();
+	variableList = createLinkedList();
+
+	if (commandHistory == NULL || variableList == NULL)
+	{
+		shell_cleanup();
+		exit(EXIT_FAILURE);
+	}
+
+	// Add the last status variable to the variable list.
+	if (setVariable(SHELL_CMD_LAST_STATUS, "0") == Failure)
+	{
+		shell_cleanup();
+		exit(EXIT_FAILURE);
 	}
 
 	// Set the prompt to the default one.
@@ -127,6 +151,13 @@ void shell_sig_handler(int signum) {
 	}
 }
 
+void update_laststatus(int status) {
+	// Set the last status variable.
+	char status_str[10] = {0};
+	sprintf(status_str, "%d", status);
+	setVariable(SHELL_CMD_LAST_STATUS, status_str);
+}
+
 void shell_cleanup() {
 	// Free the memory allocated for the current working directory.
 	free(cwd);
@@ -136,18 +167,54 @@ void shell_cleanup() {
 
 	// Free the memory allocated for the current prompt.
 	free(curr_prompt);
+
+	// Free the memory allocated for the command history.
+	PNode curr = commandHistory->head;
+
+	while (curr != NULL)
+	{
+		PNode tmp = curr;
+		curr = curr->next;
+		
+		PCommand command = (PCommand)(tmp->data);
+		free(command->command);
+		free(command);
+		free(tmp);
+	}
+
+	commandHistory->head = NULL;
+
+	destroyLinkedList(commandHistory);
+
+	// Free the memory allocated for the variable list.
+	curr = variableList->head;
+
+	while (curr != NULL)
+	{
+		PNode tmp = curr;
+		curr = curr->next;
+		
+		PVariable variable = (PVariable)(tmp->data);
+		free(variable->name);
+		free(variable->value);
+		free(variable);
+		free(tmp);
+	}
+
+	variableList->head = NULL;
+
+	destroyLinkedList(variableList);
 }
 
 CommandType parse_command(char *command, char ***argv) {
-	char *token = NULL;
 	int words = 1;
 	bool inQuotes = false;
 
 	// Remove the newline character from the command, to check if it's empty.
 	command = strtok(command, "\n");
 
-	// Safe-fail if the command is empty, to avoid segmentation fault.
-	if (command == NULL || strlen(command) == 0)
+	// Safe-fail if the command is empty or only contains & (illegal), to avoid segmentation fault.
+	if (command == NULL || strlen(command) == 0 || strcmp(command, "&") == 0)
 		return Internal;
 
 	// Count the number of words (with support for quoted arguments).
@@ -160,136 +227,157 @@ CommandType parse_command(char *command, char ***argv) {
 			++words;
 	}
 
-	// Parse the first argument (the command itself).
-	token = strtok(command, " ");
+	// Tokenize the command into an array of arguments.
+	*argv = tokenize_command(command, words);
+	char **pargv = *argv;
+
+	// If the tokenization failed, state an error and exit.
+	if (pargv == NULL)
+	{
+		shell_cleanup();
+		exit(EXIT_FAILURE);
+	}
+
+	// Parse the variables.
+	parse_variables(pargv, variableList);
+
+	// Add the command to the command history.
+	PCommand cmd = create_command(command, false, false);
+
+	if (addNode(commandHistory, cmd) != 0)
+	{
+		destroy_command(cmd);
+
+		for (size_t k = 0; *(pargv + k) != NULL; ++k)
+			free(*(pargv + k));
+
+		free(pargv);
+		
+		shell_cleanup();
+		exit(EXIT_FAILURE);
+	}
 
 	// Exit command.
-	if (strcmp(token, SHELL_CMD_EXIT) == 0)
+	if (strcmp(*pargv, SHELL_CMD_EXIT) == 0)
 	{
+		// Clean up arguments array.
+		for (size_t k = 0; *(pargv + k) != NULL; ++k)
+			free(*(pargv + k));
+
+		free(pargv);
 		shell_cleanup();
 		exit(EXIT_SUCCESS);
 	}
 
 	// Change directory command.
-	else if (strcmp(token, SHELL_CMD_CD) == 0)
+	else if (strcmp(*pargv, SHELL_CMD_CD) == 0)
 	{
-		// Get the next token, which is the directory to change to.
-		token = strtok(NULL, " ");
-		cmdCD(token, words);
+		Result res = cmdCD(*(pargv + 1), words);
+		cmd->isInternal = true;
+		cmd->status = (res == Success) ? 0 : 1;
+		update_laststatus(cmd->status);
 		return Internal;
 	}
 
 	// Clean screen command.
-	else if (strcmp(token, SHELL_CMD_CLEAR) == 0)
+	else if (strcmp(*pargv, SHELL_CMD_CLEAR) == 0)
 	{
 		cmdClear();
+		cmd->isInternal = true;
+		cmd->status = 0;
+		update_laststatus(0);
 		return Internal;
 	}
 
 	// Print working directory command.
-	else if (strcmp(token, SHELL_CMD_PWD) == 0)
+	else if (strcmp(*pargv, SHELL_CMD_PWD) == 0)
 	{
 		cmdPWD();
+		cmd->isInternal = true;
+		cmd->status = 0;
+		update_laststatus(0);
 		return Internal;
 	}
 
 	// Change prompt command.
-	else if (strcmp(token, SHELL_CMD_CHANGE_PROMPT) == 0)
+	else if (strcmp(*pargv, SHELL_CMD_CHANGE_PROMPT) == 0)
 	{
+		cmd->isInternal = true;
+
 		// Check if the number of arguments is correct.
 		if (words != 3)
 		{
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
+			cmd->status = 1;
+			update_laststatus(1);
 			return Internal;
 		}
-
-		token = strtok(NULL, " ");
 
 		// Check if the syntax is correct.
-		if (strcmp(token, "=") != 0)
+		if (strcmp(*(pargv + 1), "=") != 0)
 		{
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
+			cmd->status = 1;
+			update_laststatus(1);
 			return Internal;
 		}
 
-		// Extract the new prompt and pass it to the command.
-		token = strtok(NULL, " ");
-
-		cmdChangePrompt(token);
+		Result res = cmdChangePrompt(*(pargv + 2));
+		cmd->status = (res == Success) ? 0 : 1;
+		update_laststatus(cmd->status);
 		return Internal;
 	}
 
-	// Allocate memory for the arguments array.
-	*argv = (char **)calloc((words + 1), sizeof(char *));
-	char **pargv = *argv;
-
-	if (*argv == NULL)
+	// History command.
+	else if (strcmp(*pargv, SHELL_CMD_HISTORY) == 0)
 	{
-		perror("Internal error: System call faliure: calloc(3)");
-		shell_cleanup();
-		exit(EXIT_FAILURE);
+		cmd->isInternal = true;
+		Result res = cmdHistory(words);
+		cmd->status = (res == Success) ? 0 : 1;
+		update_laststatus(cmd->status);
+		return Internal;
 	}
 
-	// Parse the arguments (if there are any).
-	while (token != NULL)
+	// Read command.
+	else if (strcmp(*pargv, SHELL_CMD_READ) == 0)
 	{
-		// Allocate memory for the argument.
-		*pargv = (char *)calloc((strlen(token) + 1), sizeof(char));
+		cmd->isInternal = true;
+		Result res = cmdRead(*(pargv + 1));
+		cmd->status = (res == Success) ? 0 : 1;
+		update_laststatus(cmd->status);
+		return Internal;
+	}
 
-		if (*pargv == NULL)
+	// Set Variable command.
+	else if (*command == '$')
+	{
+		cmd->isInternal = true;
+
+		if (words != 3)
 		{
-			perror("Internal error: System call faliure: calloc(3)");
-			free(*argv);
+			fprintf(stderr, "%s\n", SHELL_ERR_CMD_SET_SYNTAX);
+			cmd->status = 1;
+			update_laststatus(1);
 			return Internal;
 		}
 
-		
-		// If the argument is quoted, we need to parse it differently.
-		// TODO: Fix this. Does SIGSEGV when using quoted arguments.
-		/*
-		if (*token == '"' && strlen(token) > 1)
+		else if (strcmp(*(pargv + 1), "=") != 0)
 		{
-			strcpy(*pargv, (token + 1));
+			fprintf(stderr, "%s\n", SHELL_ERR_CMD_SET_SYNTAX);
+			cmd->status = 1;
+			update_laststatus(1);
+			return Internal;
+		}
 
-			while (token != NULL)
-			{
-				token = strtok(NULL, "\"");
-
-				// Reallocate memory for the argument.
-				*pargv = realloc(*pargv, (strlen(*pargv) + strlen(token) + 2) * sizeof(char));
-
-				// Zero the memory allocated for the rest of the argument.
-				memset(*pargv + strlen(*pargv), '\0', strlen(token) + 2);
-
-				if (token != NULL)
-				{
-					strcat(*pargv, " ");
-					strcat(*pargv, token);
-				}
-			}
-
-			if (*(*pargv + strlen(*pargv) - 1) == '"')
-				*(*pargv + strlen(*pargv) - 1) = '\0';
-
-			++pargv;
-			token = strtok(NULL, " ");
-
-			continue;
-		}*/
-
-		strcpy(*pargv, token);
-		++pargv;
-		token = strtok(NULL, " ");
+		Result res = setVariable(*(pargv + 0) + 1, *(pargv + 2));
+		cmd->status = (res == Success) ? 0 : 1;
+		update_laststatus(cmd->status);
+		return Internal;
 	}
 
-	// Set the last argument to NULL, as required by execvp.
-	// By definition, the last argument must be NULL, as we allocate just enough memory for the arguments.
-	// We also make sure to free the memory allocated for the last argument, to avoid memory leaks.
-	if (*pargv != NULL)
-	{
-		free(*pargv);
-		*pargv = NULL;
-	}
+	// Check if the command is a background command.
+	if (*(command + strlen(command) - 1) == '&')
+		cmd->background = true;
 
 	// This is an external command.
 	return External;
@@ -384,6 +472,22 @@ void execute_command(char **argv) {
 		// Parent process.
 		else
 		{
+			PCommand cmd = (PCommand)(commandHistory->tail->data);
+
+			if (cmd->background)
+			{
+				waitpid(pid, &status, WNOHANG);
+				fprintf(stdout, "[%d]\n", pid);
+
+				// Update the command history.
+				cmd->status = status >> 8;
+
+				// Set the last status variable.
+				update_laststatus(cmd->status);
+
+				return;
+			}
+
 			// Wait for the child process to finish.
 			wait(&status);
 
@@ -393,6 +497,12 @@ void execute_command(char **argv) {
 			bit_7 = status & 0x80;
 
 			fprintf(stdout, "status: exit=%d, sig=%d, core=%d\n", high_8, low_7, bit_7); 
+
+			// Update the command history.
+			cmd->status = (high_8 == 0 && bit_7 == 0) ? 0 : 1;
+
+			// Set the last status variable.
+			update_laststatus(cmd->status);
 		}
 	}
 

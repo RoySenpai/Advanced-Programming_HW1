@@ -18,25 +18,10 @@
 
 #include "../include/shell_internal_cmds.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
-#include <stdbool.h>
-
-extern char *homedir;
-extern char *cwd;
-extern char *workingdir;
-extern char *curr_prompt;
-
-// @TODO: Roy you should read and modify these variables in your prespective.
-#define MAX_VARIABLES 100
-#define MAX_VARIABLE_NAME_LENGTH 50
-#define MAX_VARIABLE_VALUE_LENGTH 100
-
-extern char variableNames[MAX_VARIABLES][MAX_VARIABLE_NAME_LENGTH];
-extern char variableValues[MAX_VARIABLES][MAX_VARIABLE_VALUE_LENGTH];
-extern int variableCount;
-
-//end of Todo variables
 
 Result cmdCD(char *path, int argc) {
     // Only one argument is allowed, like in the original shell.
@@ -119,49 +104,7 @@ Result cmdChangePrompt(char *new_prompt) {
     return Success;
 }
 
-extern int last_status;  // Assuming you store the last command status in this global variable.
-// @TODO: help from Roy how to handle it
-
-
-Result cmdEcho(char **args, int argc) {
-    bool redirect = false;
-    FILE *fp = stdout;  // Default output to stdout.
-
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(args[i], ">") == 0 || strcmp(args[i], ">>") == 0) {
-            // Handle redirection
-            redirect = true;
-            const char *mode = (strcmp(args[i], ">") == 0) ? "w" : "a";
-            if (++i < argc) {
-                fp = fopen(args[i], mode);
-                if (!fp) {
-                    perror("fopen");
-                    return Failure;
-                }
-            } else {
-                fprintf(stderr, "Missing file name for redirection.\n");
-                return Failure;
-            }
-            break;  // Stop processing further arguments after redirection.
-        } else if (strcmp(args[i], "$?") == 0) {
-            // Print the status of the last executed command.
-            fprintf(fp, "%d ", last_status);
-        } else {
-            // Print the argument.
-            fprintf(fp, "%s ", args[i]);
-        }
-    }
-
-    if (!redirect) {
-        fprintf(fp, "\n");  // Add a newline if outputting to stdout.
-    } else if (fp != stdout) {
-        fclose(fp);  // Close the file if we opened one for redirection.
-    }
-
-    return Success;
-}
-
-Result repeatLastCommand(char *lastCommand) {
+Result cmdrepeatLastCommand(char *lastCommand) {
     if (lastCommand == NULL || strlen(lastCommand) == 0) {
         fprintf(stderr, "No command to repeat.\n");
         return Failure;
@@ -171,36 +114,80 @@ Result repeatLastCommand(char *lastCommand) {
 }
 
 Result setVariable(char *name, char *value) {
-    if (variableCount >= MAX_VARIABLES) {
-        fprintf(stderr, "Maximum number of variables reached.\n");
-        return Failure;
-    }
+    // Check if the variable already exists. If yes, update its value.
+    PNode curr = variableList->head;
+    while (curr != NULL)
+    {
+        PVariable variable = (PVariable) (curr->data);
+        if (strcmp(variable->name, name) == 0)
+        {
+            char *tmp = (char *) calloc(strlen(value) + 1, sizeof(char));
 
-    // Check if the variable already exists
-    for (int i = 0; i < variableCount; i++) {
-        if (strcmp(variableNames[i], name) == 0) {
-            strncpy(variableValues[i], value, MAX_VARIABLE_VALUE_LENGTH);
+            if (tmp == NULL) {
+                perror("Error: setVariable() failed: malloc() failed");
+                return Failure;
+            }
+
+            strcpy(tmp, value);
+            free(variable->value);
+            variable->value = tmp;
             return Success;
         }
+        curr = curr->next;
     }
 
     // Add a new variable
-    strncpy(variableNames[variableCount], name, MAX_VARIABLE_NAME_LENGTH);
-    strncpy(variableValues[variableCount], value, MAX_VARIABLE_VALUE_LENGTH);
-    variableCount++;
+    PVariable variable = create_variable(name, value);
+    if (variable == NULL)
+    {
+        fprintf(stderr, "Error: setVariable() failed: create_variable() failed\n");
+        return Failure;
+    }
+
+    if (addNode(variableList, variable) == 1)
+    {
+        fprintf(stderr, "Error: setVariable() failed: add_node() failed\n");
+        destroy_variable(variable);
+        return Failure;
+    }
 
     return Success;
 }
 
-//@TODO: Do we need now to modify the echo command to print the variables? or do we want to do it in the parse_command?
 Result cmdRead(char *variableName) {
-    char input[MAX_VARIABLE_VALUE_LENGTH];
-    if (fgets(input, sizeof(input), stdin) == NULL) {
+    char input[SHELL_MAX_COMMAND_LENGTH] = {0};
+
+    if (fgets(input, sizeof(input), stdin) == NULL)
         return Failure;  // Error or end-of-file
-    }
 
     // Remove newline character
-    input[strcspn(input, "\n")] = 0;
+    *(input + strcspn(input, "\n")) = '\0';
 
     return setVariable(variableName, input);
+}
+
+Result cmdHistory(int argc) {
+    if (argc > 2) {
+        fprintf(stderr, "Too many arguments.\n");
+        return Failure;
+    }
+
+    // Print all history
+    PNode curr = commandHistory->head;
+    int i = 1;
+    fprintf(stdout, "Command History:\n");
+    fprintf(stdout, "#\tCMD\tSTAT\tINT\tBACK\n");
+
+    while (curr != NULL)
+    {
+        PCommand command = (PCommand) (curr->data);
+        fprintf(stdout, "%d\t%s\t%s\t%s\t%s\n", i, command->command, 
+            (command->status == 0 ? "SUCC":"FAIL"), 
+            (command->isInternal == 0 ? "NO":"YES"), 
+            (command->background == 0 ? "NO":"YES"));
+        curr = curr->next;
+        i++;
+    }
+
+    return Success;
 }
