@@ -77,9 +77,9 @@ Result cmdChangePrompt(char *new_prompt);
  * @param lastCommand The last command.
  * @return Success if the command succeeded, Failure otherwise.
  */
-Result cmdrepeatLastCommand(char *lastCommand);
+Result cmdrepeatLastCommand();
 
-//TODO: Roy you should make sure you understand what is going on here.
+
 /*
  * @brief Execute set variable command.
  * @param name The name of the variable.
@@ -101,5 +101,14 @@ Result cmdRead(char *variableName);
  * @return Success if the command succeeded, Failure otherwise.
  */
 Result cmdHistory(int argc);
+
+/*
+ * @brief Execute if-else command.
+ * @param condition The condition to check.
+ * @param thenCmd The command to execute if the condition is true.
+ * @param elseCmd The command to execute if the condition is false.
+ * @return Success if the command succeeded, Failure otherwise.
+ */
+Result cmdIfElse(char *condition, char *thenCmd, char *elseCmd);
 
 #endif /* _SHELL_CD_H */

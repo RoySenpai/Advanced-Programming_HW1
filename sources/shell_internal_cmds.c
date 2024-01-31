@@ -104,14 +104,32 @@ Result cmdChangePrompt(char *new_prompt) {
     return Success;
 }
 
-Result cmdrepeatLastCommand(char *lastCommand) {
-    if (lastCommand == NULL || strlen(lastCommand) == 0) {
-        fprintf(stderr, "No command to repeat.\n");
+Result cmdrepeatLastCommand() {
+    if (commandHistory->tail == NULL) {
+        fprintf(stderr, "No commands in history.\n");
         return Failure;
     }
-    //@TODO: help from Roy how to handle it - do we want to send it back to parse_command? or do we want to use system()?
+
+    PCommand lastCommand = (PCommand)commandHistory->tail->data;
+    if (lastCommand == NULL || strlen(lastCommand->command) == 0) {
+        fprintf(stderr, "No last command to repeat.\n");
+        return Failure;
+    }
+
+    // Resend the last command to the parser and executor
+    char **argv = NULL;
+//    parse_command(lastCommand->command, &argv);
+//    execute_command(argv);
+
+    // Free argv after execution
+    for (size_t k = 0; *(argv + k) != NULL; ++k) {
+        free(*(argv + k));
+    }
+    free(argv);
+
     return Success;
 }
+
 
 Result setVariable(char *name, char *value) {
     // Check if the variable already exists. If yes, update its value.
@@ -187,6 +205,22 @@ Result cmdHistory(int argc) {
             (command->background == 0 ? "NO":"YES"));
         curr = curr->next;
         i++;
+    }
+
+    return Success;
+}
+
+Result cmdIfElse(char *condition, char *thenCmd, char *elseCmd) {
+    int status = system(condition); // Execute the condition command
+
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        // Condition succeeded, execute thenCmd
+        system(thenCmd);
+    } else {
+        // Condition failed, execute elseCmd
+        if (elseCmd != NULL) {
+            system(elseCmd);
+        }
     }
 
     return Success;
