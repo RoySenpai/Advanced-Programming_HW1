@@ -74,7 +74,6 @@ Result cmdChangePrompt(char *new_prompt);
 
 /*
  * @brief Execute last command.
- * @param lastCommand The last command.
  * @return Success if the command succeeded, Failure otherwise.
  */
 Result cmdrepeatLastCommand();

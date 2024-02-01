@@ -20,12 +20,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <fcntl.h>
 #include <string.h>
 #include <strings.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 // Global variables section
 
@@ -55,6 +57,9 @@ int main() {
 
 	// Arguments array
 	char **argv = NULL;
+
+	// Number of arguments
+	int count_args = 0;
 
 	// Get home directory
 	homedir = getenv("HOME");
@@ -124,12 +129,20 @@ int main() {
 		if (parse_command(command, &argv) == Internal)
 			continue;
 
+		// Count the number of arguments.
+		count_args = 0;
+		for (size_t k = 0; *(argv + k) != NULL; ++k)
+			++count_args;
+
 		// Execute command
 		execute_command(argv);
 
 		// Free the memory allocated for the arguments array.
-		for (size_t k = 0; *(argv + k) != NULL; ++k)
-			free(*(argv + k));
+		for (int k = 0; k < count_args; ++k)
+		{
+			if (*(argv + k) != NULL)
+				free(*(argv + k));
+		}
 
 		free(argv);
 
@@ -216,6 +229,12 @@ CommandType parse_command(char *command, char ***argv) {
 	// Safe-fail if the command is empty or only contains & (illegal), to avoid segmentation fault.
 	if (command == NULL || strlen(command) == 0 || strcmp(command, "&") == 0)
 		return Internal;
+
+	if (strcmp(command, SHELL_CMD_REPEATED) == 0)
+	{
+		cmdrepeatLastCommand();
+		return Internal;
+	}
 
 	// Count the number of words (with support for quoted arguments).
 	for (size_t k = 0; k < strlen(command); ++k)
@@ -480,6 +499,7 @@ CommandType parse_command(char *command, char ***argv) {
 void execute_command(char **argv) {
 	pid_t pid;
 	int status = 0, i = 0, num_pipes = 0;
+	int count_args = 0;
 	bool redirect = false;
 	char ***pipes = NULL;
 
@@ -489,54 +509,18 @@ void execute_command(char **argv) {
 		if (strcmp(*(argv + i), "|") == 0)
 			++num_pipes;
 
-		else if (strcmp(*(argv + i), ">") == 0 || strcmp(*(argv + i), ">>") == 0 || strcmp(*(argv + i), "<") == 0)
+		else if (strcmp(*(argv + i), ">") == 0 || 
+				strcmp(*(argv + i), ">>") == 0 || 
+				strcmp(*(argv + i), "<") == 0 || 
+				strcmp(*(argv + i), "2>") == 0)
 			redirect = true;
 
 		++i;
+		++count_args;
 	}
 
-	if (num_pipes > 0)
-	{
-		// Allocate memory for the pipes array.
-		pipes = (char ***)calloc(num_pipes, sizeof(char **));
-
-		if (pipes == NULL)
-		{
-			perror("Internal error: System call faliure: calloc(3)");
-			shell_cleanup();
-			exit(EXIT_FAILURE);
-		}
-
-		// Allocate memory for each pipe.
-		for (int k = 0; k < num_pipes; ++k)
-		{
-			*(pipes + k) = (char **)calloc(i, sizeof(char *));
-
-			if (*(pipes + k) == NULL)
-			{
-				perror("Internal error: System call faliure: calloc(3)");
-				shell_cleanup();
-				exit(EXIT_FAILURE);
-			}
-		}
-
-		// Parse the command into pipes.
-		i = 0;
-
-		for (int k = 0; *(argv + k) != NULL; ++k)
-		{
-			if (strcmp(*(argv + k), "|") == 0)
-			{
-				++i;
-				continue;
-			}
-
-			*(*(pipes + i) + k) = *(argv + k);
-		}
-	}
-
-	// Case 1: No pipes, no redirections.
-	else if (!redirect)
+	// Case 1: No pipes
+	if (num_pipes == 0)
 	{
 		// Fork the process.
 		pid = fork();
@@ -553,6 +537,161 @@ void execute_command(char **argv) {
 		{
 			// Reset SIGINT to default.
 			signal(SIGINT, SIG_DFL);
+
+			// Handle redirects
+			if (redirect)
+			{
+				bool in_mode = false, out_mode = false, err_mode = false;
+				int input_fd = STDIN_FILENO, output_fd = STDOUT_FILENO, append_fd = STDOUT_FILENO, error_fd = STDERR_FILENO;
+
+				for (int i = 0; i < count_args && !(in_mode && out_mode && err_mode); ++i)
+				{
+					if (strcmp(*(argv + i), "<") == 0)
+					{
+						if (in_mode)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_IN_TWICE);
+							exit(EXIT_FAILURE);
+						}
+
+						else if (*(argv + i + 1) == NULL)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							exit(EXIT_FAILURE);
+						}
+
+						// Open the file.
+						input_fd = open(*(argv + i + 1), O_RDONLY);
+
+						if (input_fd == -1)
+						{
+							perror("Internal error: System call faliure: open(2)");
+							exit(EXIT_FAILURE);
+						}
+
+						// Redirect stdin to the file.
+						dup2(input_fd, STDIN_FILENO);
+
+						// Close the file.
+						close(input_fd);
+
+						in_mode = true;
+
+						// Remove the redirection arguments from the arguments array.
+						free(*(argv + i));
+						*(argv + i) = NULL;
+					}
+
+					else if (strcmp(*(argv + i), ">") == 0)
+					{
+						if (out_mode)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+							exit(EXIT_FAILURE);
+						}
+
+						else if (*(argv + i + 1) == NULL)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							exit(EXIT_FAILURE);
+						}
+
+						// Open the file.
+						output_fd = open(*(argv + i + 1), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+						if (output_fd == -1)
+						{
+							perror("Internal error: System call faliure: open(2)");
+							exit(EXIT_FAILURE);
+						}
+
+						// Redirect stdout to the file.
+						dup2(output_fd, STDOUT_FILENO);
+
+						// Close the file.
+						close(output_fd);
+
+						out_mode = true;
+
+						// Remove the redirection arguments from the arguments array.
+						free(*(argv + i));
+						*(argv + i) = NULL;
+					}
+
+					else if (strcmp(*(argv + i), ">>") == 0)
+					{
+						if (out_mode)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+							exit(EXIT_FAILURE);
+						}
+
+						else if (*(argv + i + 1) == NULL)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							exit(EXIT_FAILURE);
+						}
+
+						// Open the file.
+						append_fd = open(*(argv + i + 1), O_WRONLY | O_CREAT | O_APPEND, 0644);
+
+						if (append_fd == -1)
+						{
+							perror("Internal error: System call faliure: open(2)");
+							exit(EXIT_FAILURE);
+						}
+
+						// Redirect stdout to the file.
+
+						dup2(append_fd, STDOUT_FILENO);
+
+						// Close the file.
+						close(append_fd);
+
+						out_mode = true;
+
+						// Remove the redirection arguments from the arguments array.
+						free(*(argv + i));
+						*(argv + i) = NULL;
+					}
+
+					else if (strcmp(*(argv + i), "2>") == 0)
+					{
+						if (err_mode)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+							exit(EXIT_FAILURE);
+						}
+
+						else if (*(argv + i + 1) == NULL)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							exit(EXIT_FAILURE);
+						}
+
+						// Open the file.
+						error_fd = open(*(argv + i + 1), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+						if (error_fd == -1)
+						{
+							perror("Internal error: System call faliure: open(2)");
+							exit(EXIT_FAILURE);
+						}
+
+						// Redirect stderr to the file.
+						dup2(error_fd, STDERR_FILENO);
+
+						// Close the file.
+						close(error_fd);
+
+						err_mode = true;
+
+						// Remove the redirection arguments from the arguments array.
+						free(*(argv + i));
+						*(argv + i) = NULL;
+					}
+				}
+			}
 
 			// Execute the command.
 			if (execvp(*argv, argv) == -1)
@@ -598,14 +737,380 @@ void execute_command(char **argv) {
 			// Set the last status variable.
 			update_laststatus(cmd->status);
 		}
+
+		return;
 	}
 
-	// Memory cleanup.
-	if (pipes != NULL)
+	pid_t main_fork = fork();
+
+	if (main_fork == -1)
 	{
+		perror("Internal error: System call faliure: fork(2)");
+		shell_cleanup();
+		exit(EXIT_FAILURE);
+	}
+
+	else if (main_fork == 0)
+	{
+		// Reset SIGINT to default.
+		signal(SIGINT, SIG_DFL);
+
+		// Allocate memory for the pipes array.
+		pipes = (char ***)calloc(num_pipes + 1, sizeof(char **));
+
+		if (pipes == NULL)
+		{
+			perror("Internal error: System call faliure: calloc(3)");
+			shell_cleanup();
+			exit(EXIT_FAILURE);
+		}
+
+		// Allocate memory for each pipe.
+		for (int k = 0; k < (num_pipes + 1); ++k)
+		{
+			*(pipes + k) = (char **)calloc(count_args, sizeof(char *));
+
+			if (*(pipes + k) == NULL)
+			{
+				perror("Internal error: System call faliure: calloc(3)");
+				shell_cleanup();
+				exit(EXIT_FAILURE);
+			}
+		}
+
+		// Parse the command into pipes.
+		int arg_pos = 0, pipe_pos = 0;
+
+		for (int i = 0; i < count_args; ++i)
+		{
+			if (strcmp(*(argv + i), "|") == 0)
+			{
+				++pipe_pos;
+				arg_pos = 0;
+				continue;
+			}
+
+			*(*(pipes + pipe_pos) + arg_pos) = *(argv + i);
+			arg_pos++;
+		}
+
+		// Create pipes.
+		int pipe_fds[num_pipes * 2];
+
 		for (int k = 0; k < num_pipes; ++k)
-			free(*(pipes + k));
+		{
+			if (pipe(pipe_fds + (k * 2)) == -1)
+			{
+				perror("Internal error: System call faliure: pipe(2)");
+				shell_cleanup();
+				exit(EXIT_FAILURE);
+			}
+		}
+
+		// Redirect in pipes handles.
+		bool in_mode = false, out_mode = false, err_mode = false;
+		int input_fd = STDIN_FILENO, output_fd = STDOUT_FILENO, append_fd = STDOUT_FILENO, error_fd = STDERR_FILENO;
+
+		pid_t first_command = fork();
+
+		if (first_command == -1)
+		{
+			perror("Internal error: System call faliure: fork(2)");
+			exit(EXIT_FAILURE);
+		}
+
+		else if (first_command == 0)
+		{
+			// Redirect stdin to the first pipe.
+			dup2(pipe_fds[1], STDOUT_FILENO);
+
+			// Close the pipe.
+			close(pipe_fds[0]);
+			close(pipe_fds[1]);
+
+			// Handle redirects
+			if (redirect)
+			{
+				for (int i = 0; i < count_args; ++i)
+				{
+					if (strcmp(*(argv + i), "<") == 0)
+					{
+						if (in_mode)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_IN_TWICE);
+							exit(EXIT_FAILURE);
+						}
+
+						else if (*(argv + i + 1) == NULL)
+						{
+							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							exit(EXIT_FAILURE);
+						}
+
+						// Open the file.
+						input_fd = open(*(argv + i + 1), O_RDONLY);
+
+						if (input_fd == -1)
+						{
+							perror("Internal error: System call faliure: open(2)");
+							exit(EXIT_FAILURE);
+						}
+
+						// Redirect stdin to the file.
+						dup2(input_fd, STDIN_FILENO);
+
+						// Close the file.
+						close(input_fd);
+
+						in_mode = true;
+
+						// Remove the redirection arguments from the arguments array.
+						free(*(argv + i));
+						*(argv + i) = NULL;
+					}
+
+					// Can't redirect output in the middle of a pipe.
+					else if (strcmp(*(argv + i), ">") == 0 || 
+							strcmp(*(argv + i), ">>") == 0 || 
+							strcmp(*(argv + i), "2>") == 0)
+					{
+						fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_IN_FIRST_PIPE);
+						exit(EXIT_FAILURE);
+					}
+				}
+			}
+
+			// Execute the first command.
+			if (execvp(**pipes, *pipes) == -1)
+			{
+				perror("Internal error: System call faliure: execvp(3)");
+				shell_cleanup();
+				exit(EXIT_FAILURE);
+			}
+
+			// Second command and onwards.
+			else
+			{
+				for (int i = 0; i < num_pipes - 1; ++i)
+				{
+					pid_t pid_h = fork();
+
+					if (pid_h == -1)
+					{
+						perror("Internal error: System call faliure: fork(2)");
+						exit(EXIT_FAILURE);
+					}
+
+					else if (pid_h == 0)
+					{
+						// Duplicate the pipe handles.
+						dup2(pipe_fds[i - 1], STDIN_FILENO);
+
+						// If not the last pipe, redirect stdout to the next pipe.
+						if (i < num_pipes - 2)
+							dup2(pipe_fds[i], STDOUT_FILENO);	
+
+						// Close all other pipe handles.
+						for (int j = 0; j < i; ++j)
+						{
+							close(pipe_fds[j * 2]);
+							close(pipe_fds[j * 2 + 1]);
+						}
+
+						for (int j = i + 1; j < num_pipes; ++j)
+						{
+							close(pipe_fds[j * 2]);
+							close(pipe_fds[j * 2 + 1]);
+						}
+
+						// Check if one of the middle pipes uses redirection.
+						if (redirect)
+						{
+							if (i < num_pipes - 2)
+							{
+								for (int i = 0; i < count_args; ++i)
+								{
+									if (strcmp(*(argv + i), "<") == 0 || 
+											strcmp(*(argv + i), ">") == 0 || 
+											strcmp(*(argv + i), ">>") == 0 || 
+											strcmp(*(argv + i), "2>") == 0)
+									{
+										fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_BETWEEN_PIPES);
+										exit(EXIT_FAILURE);
+									}
+								}
+							}
+
+							else
+							{
+								for (int i = 0; i < count_args && !(out_mode && err_mode); ++i)
+								{
+									if (strcmp(*(argv + i), "<") == 0)
+									{
+										fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_IN_IN_LAST_PIPE);
+										exit(EXIT_FAILURE);
+									}
+
+									else if (strcmp(*(argv + i), ">") == 0)
+									{
+										if (out_mode)
+										{
+											fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+											exit(EXIT_FAILURE);
+										}
+
+										else if (*(argv + i + 1) == NULL)
+										{
+											fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+											exit(EXIT_FAILURE);
+										}
+
+										// Open the file.
+										output_fd = open(*(argv + i + 1), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+										if (output_fd == -1)
+										{
+											perror("Internal error: System call faliure: open(2)");
+											exit(EXIT_FAILURE);
+										}
+
+										// Redirect stdout to the file.
+										dup2(output_fd, STDOUT_FILENO);
+
+										// Close the file.
+										close(output_fd);
+
+										out_mode = true;
+
+										// Remove the redirection arguments from the arguments array.
+										free(*(argv + i));
+										*(argv + i) = NULL;
+									}
+
+									else if (strcmp(*(argv + i), ">>") == 0)
+									{
+										if (out_mode)
+										{
+											fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+											exit(EXIT_FAILURE);
+										}
+
+										else if (*(argv + i + 1) == NULL)
+										{
+											fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+											exit(EXIT_FAILURE);
+										}
+
+										// Open the file.
+										append_fd = open(*(argv + i + 1), O_WRONLY | O_CREAT | O_APPEND, 0644);
+
+										if (append_fd == -1)
+										{
+											perror("Internal error: System call faliure: open(2)");
+											exit(EXIT_FAILURE);
+										}
+
+										// Redirect stdout to the file.
+
+										dup2(append_fd, STDOUT_FILENO);
+
+										// Close the file.
+										close(append_fd);
+
+										out_mode = true;
+
+										// Remove the redirection arguments from the arguments array.
+										free(*(argv + i));
+										*(argv + i) = NULL;
+									}
+
+									else if (strcmp(*(argv + i), "2>") == 0)
+									{
+										if (err_mode)
+										{
+											fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+											exit(EXIT_FAILURE);
+										}
+
+										else if (*(argv + i + 1) == NULL)
+										{
+											fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+											exit(EXIT_FAILURE);
+										}
+
+										// Open the file.
+										error_fd = open(*(argv + i + 1), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+										if (error_fd == -1)
+										{
+											perror("Internal error: System call faliure: open(2)");
+											exit(EXIT_FAILURE);
+										}
+
+										// Redirect stderr to the file.
+										dup2(error_fd, STDERR_FILENO);
+
+										// Close the file.
+										close(error_fd);
+
+										err_mode = true;
+
+										// Remove the redirection arguments from the arguments array.
+										free(*(argv + i));
+										*(argv + i) = NULL;
+									}
+								}
+							}
+
+						}
+
+						// Execute the command.
+						if (execvp(*pipes[i], pipes[i]) == -1)
+						{
+							perror("Internal error: System call faliure: execvp(3)");
+							exit(EXIT_FAILURE);
+						}
+					}
+				}
+			}
+		}
 
 		free(pipes);
+	}
+
+	// Parent process.
+	else
+	{
+		PCommand cmd = (PCommand)(commandHistory->tail->data);
+
+		if (cmd->background)
+		{
+			waitpid(main_fork, &status, WNOHANG);
+			fprintf(stdout, "[%d]\n", main_fork);
+
+			// Update the command history.
+			cmd->status = status >> 8;
+
+			// Set the last status variable.
+			update_laststatus(cmd->status);
+
+			return;
+		}
+
+		// Wait for the child process to finish.
+		wait(&status);
+
+		int high_8, low_7, bit_7;
+		high_8 = status >> 8;
+		low_7 = status & 0x7F;
+		bit_7 = status & 0x80;
+
+		fprintf(stdout, "status: exit=%d, sig=%d, core=%d\n", high_8, low_7, bit_7);
+
+		// Update the command history.
+		cmd->status = (high_8 == 0 && bit_7 == 0) ? 0 : 1;
+
+		// Set the last status variable.
+		update_laststatus(cmd->status);
 	}
 }

@@ -119,14 +119,18 @@ Result cmdrepeatLastCommand() {
 
     // Resend the last command to the parser and executor
     char **argv = NULL;
-    parse_command(lastCommand->command, &argv);
-    execute_command(argv);
+
+    if (parse_command(lastCommand->command, &argv) == External)
+        execute_command(argv);
 
     // Free argv after execution
-    for (size_t k = 0; *(argv + k) != NULL; ++k) {
-        free(*(argv + k));
+    if (argv != NULL)
+    {
+        for (size_t k = 0; *(argv + k) != NULL; ++k)
+            free(*(argv + k));
+        
+        free(argv);
     }
-    free(argv);
 
     return Success;
 }

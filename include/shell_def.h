@@ -156,6 +156,12 @@
 #define SHELL_ERR_REDIRECT_IN_IN_LAST_PIPE "Shell internal error: Redirecting input from a file in the last pipe is not allowed"
 
 /*
+ * @brief Redirecting without a file name is not allowed.
+ * @note Used to indicate that the user tried to redirect without a file name.
+ */
+#define SHELL_ERR_REDIRECT_NO_FILE "Shell internal error: Redirecting without a file name is not allowed"
+
+/*
  * @brief Change directory error message: no such file or directory.
  * @note Used to indicate a change directory failure, and print the error.
  */
