@@ -62,7 +62,12 @@ int is_control_command(const char *cmd);
  */
 int ok_to_execute(State curr_state, Result curr_result);
 
-void freeUpMem( char **argv);
+/*
+ * @brief Clean up the memory allocated for the tokens/arguments.
+ * @param argv The array of tokens/arguments.
+ * @noreturn
+*/
+void freeUpMem(char ***argv);
 
 
 #endif // _SHELL_UTILS_H

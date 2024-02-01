@@ -14,7 +14,7 @@
 CC = gcc
 
 # Flags for the compiler.
-CFLAGS = -Wall -Wextra -Werror -std=c11 -g -pedantic -I$(SOURCE_PATH)
+CFLAGS = -Wall -Wextra -Werror -std=c99 -pedantic -I$(SOURCE_PATH)
 
 # Command to remove files.
 RM = rm -f

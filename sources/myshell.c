@@ -14,7 +14,7 @@
  *
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #include "../include/shell.h"
 #include <stdio.h>
@@ -29,8 +29,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-
-// Global variables section
+// Global variables section //
 
 // Home directory
 char *homedir = NULL;
@@ -54,7 +53,14 @@ PLinkedList variableList;
 State shell_state = STATE_NETURAL;
 
 // Main function section
-int main() {
+int main(int argc, char **args)
+{
+	if (argc > 1)
+	{
+		fprintf(stderr, "%s: Too many arguments.\n", *args);
+		return EXIT_FAILURE;
+	}
+
 	// Command buffer
 	char command[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
 
@@ -66,7 +72,7 @@ int main() {
 
 	if (homedir == NULL)
 	{
-		fprintf(stderr,"Internal error: System call faliure: getenv(3)");
+		fprintf(stderr, "Internal error: System call faliure: getenv(3)");
 		return EXIT_FAILURE;
 	}
 
@@ -75,8 +81,8 @@ int main() {
 	sa.sa_handler = shell_sig_handler;
 	sa.sa_flags = 0;
 	sigemptyset(&sa.sa_mask);
-	
-	if(sigaction(SIGINT, &sa, NULL) == -1)
+
+	if (sigaction(SIGINT, &sa, NULL) == -1)
 	{
 		perror("Internal error: System call faliure: sigaction(2)");
 		return EXIT_FAILURE;
@@ -119,7 +125,7 @@ int main() {
 		getcwd(cwd, SHELL_MAX_PATH_LENGTH);
 
 		// Print prompt
-		fprintf(stdout, "%s: ", curr_prompt);
+		fprintf(stdout, "%s ", curr_prompt);
 		fflush(stdout);
 
 		// Read command from user
@@ -133,15 +139,7 @@ int main() {
 		execute_command(argv);
 
 		// Free the memory allocated for the arguments array.
-		char **tmp = argv;
-
-		while (*tmp != NULL)
-		{
-			free(*tmp);
-			++tmp;
-		}
-
-		free(argv);
+		freeUpMem(&argv);
 
 		// Reset stdin buffer
 		bzero(command, SHELL_MAX_PATH_LENGTH + 1);
@@ -153,7 +151,8 @@ int main() {
 	return EXIT_SUCCESS;
 }
 
-void shell_sig_handler(int signum) {
+void shell_sig_handler(int signum)
+{
 	if (signum == SIGINT)
 	{
 		fprintf(stdout, "\33[2K\rYou typed Control-C!\n");
@@ -161,14 +160,16 @@ void shell_sig_handler(int signum) {
 	}
 }
 
-void update_laststatus(int status) {
+void update_laststatus(int status)
+{
 	// Set the last status variable.
 	char status_str[10] = {0};
 	sprintf(status_str, "%d", status);
 	setVariable(SHELL_CMD_LAST_STATUS, status_str);
 }
 
-void shell_cleanup() {
+void shell_cleanup()
+{
 	// Free the memory allocated for the current working directory.
 	free(cwd);
 
@@ -185,7 +186,7 @@ void shell_cleanup() {
 	{
 		PNode tmp = curr;
 		curr = curr->next;
-		
+
 		PCommand command = (PCommand)(tmp->data);
 		free(command->command);
 		free(command);
@@ -203,7 +204,7 @@ void shell_cleanup() {
 	{
 		PNode tmp = curr;
 		curr = curr->next;
-		
+
 		PVariable variable = (PVariable)(tmp->data);
 		free(variable->name);
 		free(variable->value);
@@ -216,7 +217,8 @@ void shell_cleanup() {
 	destroyLinkedList(variableList);
 }
 
-CommandType parse_command(char *command, char ***argv) {
+CommandType parse_command(char *command, char ***argv)
+{
 	int words = 1;
 	bool inQuotes = false;
 	Result curr_res = Success;
@@ -224,8 +226,11 @@ CommandType parse_command(char *command, char ***argv) {
 	// Remove the newline character from the command, to check if it's empty.
 	command = strtok(command, "\n");
 
-	// Safe-fail if the command is empty or only contains & (illegal), to avoid segmentation fault.
-	if (command == NULL || strlen(command) == 0 || strcmp(command, "&") == 0)
+	// Safe-fail if the command is empty or only contains space or & (illegal), to avoid segmentation fault.
+	if (command == NULL ||
+		strlen(command) == 0 ||
+		strcmp(command, "&") == 0 ||
+		command[0] == ' ')
 		return Internal;
 
 	if (strcmp(command, SHELL_CMD_REPEATED) == 0)
@@ -266,7 +271,7 @@ CommandType parse_command(char *command, char ***argv) {
 			if (shell_state != STATE_NETURAL)
 			{
 				fprintf(stderr, "Shell internal error: syntax error: if unexpected\n");
-                freeUpMem(*argv);
+				freeUpMem(argv);
 				return Internal;
 			}
 
@@ -294,13 +299,13 @@ CommandType parse_command(char *command, char ***argv) {
 			if (words > 1 || shell_state != STATE_WANT_THEN)
 			{
 				fprintf(stderr, "Shell internal error: syntax error: then unexpected\n");
-                freeUpMem(*argv);
+				freeUpMem(argv);
 				return Internal;
 			}
 
 			shell_state = STATE_THEN_BLOCK;
 
-            freeUpMem(*argv);
+			freeUpMem(argv);
 			return Internal;
 		}
 
@@ -314,8 +319,8 @@ CommandType parse_command(char *command, char ***argv) {
 			}
 
 			shell_state = STATE_ELSE_BLOCK;
-            freeUpMem(*argv);
-            return Internal;
+			freeUpMem(argv);
+			return Internal;
 		}
 
 		// Finish control command. Reset shell state.
@@ -328,8 +333,8 @@ CommandType parse_command(char *command, char ***argv) {
 			}
 
 			shell_state = STATE_NETURAL;
-            freeUpMem(*argv);
-            return Internal;
+			freeUpMem(argv);
+			return Internal;
 		}
 	}
 
@@ -338,16 +343,20 @@ CommandType parse_command(char *command, char ***argv) {
 	{
 		PCommand lastCommand = (PCommand)(commandHistory->tail->data);
 
-		curr_res = (lastCommand->status ? Failure:Success);
+		curr_res = (lastCommand->status ? Failure : Success);
 
 		if (!ok_to_execute(shell_state, curr_res))
+		{
+			freeUpMem(argv);
 			return Internal;
+		}
 	}
 
 	// If we expect "then" and we got a command, it's a syntax error.
 	else if (shell_state == STATE_WANT_THEN && strncmp(command, "if", 2) != 0)
 	{
 		fprintf(stderr, "Shell internal error: syntax error: then expected\n");
+		freeUpMem(argv);
 		return Internal;
 	}
 
@@ -358,11 +367,8 @@ CommandType parse_command(char *command, char ***argv) {
 	{
 		destroy_command(cmd);
 
-		for (size_t k = 0; *(pargv + k) != NULL; ++k)
-			free(*(pargv + k));
+		freeUpMem(argv);
 
-		free(pargv);
-		
 		shell_cleanup();
 		exit(EXIT_FAILURE);
 	}
@@ -371,10 +377,7 @@ CommandType parse_command(char *command, char ***argv) {
 	if (strcmp(*pargv, SHELL_CMD_EXIT) == 0)
 	{
 		// Clean up arguments array.
-		for (size_t k = 0; *(pargv + k) != NULL; ++k)
-			free(*(pargv + k));
-
-		free(pargv);
+		freeUpMem(argv);
 		shell_cleanup();
 		exit(EXIT_SUCCESS);
 	}
@@ -386,8 +389,8 @@ CommandType parse_command(char *command, char ***argv) {
 		cmd->isInternal = true;
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-        freeUpMem(*argv);
-        return Internal;
+		freeUpMem(argv);
+		return Internal;
 	}
 
 	// Clean screen command.
@@ -397,8 +400,8 @@ CommandType parse_command(char *command, char ***argv) {
 		cmd->isInternal = true;
 		cmd->status = 0;
 		update_laststatus(0);
-        freeUpMem(*argv);
-        return Internal;
+		freeUpMem(argv);
+		return Internal;
 	}
 
 	// Print working directory command.
@@ -408,8 +411,8 @@ CommandType parse_command(char *command, char ***argv) {
 		cmd->isInternal = true;
 		cmd->status = 0;
 		update_laststatus(0);
-        freeUpMem(*argv);
-        return Internal;
+		freeUpMem(argv);
+		return Internal;
 	}
 
 	// Change prompt command.
@@ -423,8 +426,8 @@ CommandType parse_command(char *command, char ***argv) {
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
 			cmd->status = 1;
 			update_laststatus(1);
-            freeUpMem(*argv);
-            return Internal;
+			freeUpMem(argv);
+			return Internal;
 		}
 
 		// Check if the syntax is correct.
@@ -433,15 +436,15 @@ CommandType parse_command(char *command, char ***argv) {
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
 			cmd->status = 1;
 			update_laststatus(1);
-            freeUpMem(*argv);
-            return Internal;
+			freeUpMem(argv);
+			return Internal;
 		}
 
 		Result res = cmdChangePrompt(*(pargv + 2));
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-        freeUpMem(*argv);
-        return Internal;
+		freeUpMem(argv);
+		return Internal;
 	}
 
 	// History command.
@@ -451,8 +454,8 @@ CommandType parse_command(char *command, char ***argv) {
 		Result res = cmdHistory(words);
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-        freeUpMem(*argv);
-        return Internal;
+		freeUpMem(argv);
+		return Internal;
 	}
 
 	// Read command.
@@ -462,21 +465,22 @@ CommandType parse_command(char *command, char ***argv) {
 		Result res = cmdRead(*(pargv + 1));
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-        freeUpMem(*argv);
-        return Internal;
+		freeUpMem(argv);
+		return Internal;
 	}
 
-    // !! command. cmdrepeatLastCommand
-    else if (strcmp(*pargv, "!!") == 0) {
-        cmd->isInternal = true;
-        Result res = cmdrepeatLastCommand();
-        cmd->status = (res == Success) ? 0 : 1;
-        update_laststatus(cmd->status);
-        freeUpMem(*argv);
-        return Internal;
-    }
+	// !! command. cmdrepeatLastCommand
+	else if (strcmp(*pargv, "!!") == 0)
+	{
+		cmd->isInternal = true;
+		Result res = cmdrepeatLastCommand();
+		cmd->status = (res == Success) ? 0 : 1;
+		update_laststatus(cmd->status);
+		freeUpMem(argv);
+		return Internal;
+	}
 
-    // Set Variable command.
+	// Set Variable command.
 	else if (*command == '$')
 	{
 		cmd->isInternal = true;
@@ -486,8 +490,8 @@ CommandType parse_command(char *command, char ***argv) {
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_SET_SYNTAX);
 			cmd->status = 1;
 			update_laststatus(1);
-            freeUpMem(*argv);
-            return Internal;
+			freeUpMem(argv);
+			return Internal;
 		}
 
 		else if (strcmp(*(pargv + 1), "=") != 0)
@@ -495,28 +499,35 @@ CommandType parse_command(char *command, char ***argv) {
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_SET_SYNTAX);
 			cmd->status = 1;
 			update_laststatus(1);
-            freeUpMem(*argv);
-            return Internal;
+			freeUpMem(argv);
+			return Internal;
+		}
+
+		// Safe fail, as $? variable is reserved.
+		else if (strcmp(*(pargv + 0), "$?") == 0)
+		{
+			fprintf(stderr, "%s\n", SHELL_ERR_CMD_SET_SYNTAX);
+			freeUpMem(argv);
+			return Internal;
 		}
 
 		Result res = setVariable(*(pargv + 0) + 1, *(pargv + 2));
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-        freeUpMem(*argv);
-        return Internal;
+		freeUpMem(argv);
+		return Internal;
 	}
 
 	// Check if the command is a background command.
 	if (*(command + strlen(command) - 1) == '&')
 		cmd->background = true;
 
-    // Before returning, free the memory allocated for the arguments array.
-    freeUpMem(*argv);
 	// This is an external command.
 	return External;
 }
 
-void execute_command(char **argv) {
+void execute_command(char **argv)
+{
 	pid_t pid;
 	int status = 0, i = 0, num_pipes = 0;
 	int count_args = 0;
@@ -529,10 +540,10 @@ void execute_command(char **argv) {
 		if (strcmp(*(argv + i), "|") == 0)
 			++num_pipes;
 
-		else if (strcmp(*(argv + i), ">") == 0 || 
-				strcmp(*(argv + i), ">>") == 0 || 
-				strcmp(*(argv + i), "<") == 0 || 
-				strcmp(*(argv + i), "2>") == 0)
+		else if (strcmp(*(argv + i), ">") == 0 ||
+				 strcmp(*(argv + i), ">>") == 0 ||
+				 strcmp(*(argv + i), "<") == 0 ||
+				 strcmp(*(argv + i), "2>") == 0)
 			redirect = true;
 
 		++i;
@@ -548,6 +559,7 @@ void execute_command(char **argv) {
 		if (pid == -1)
 		{
 			perror("Internal error: System call faliure: fork(2)");
+			freeUpMem(&argv);
 			shell_cleanup();
 			exit(EXIT_FAILURE);
 		}
@@ -571,12 +583,14 @@ void execute_command(char **argv) {
 						if (in_mode)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_IN_TWICE);
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
 						else if (*(argv + i + 1) == NULL)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
@@ -586,6 +600,7 @@ void execute_command(char **argv) {
 						if (input_fd == -1)
 						{
 							perror("Internal error: System call faliure: open(2)");
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
@@ -607,12 +622,14 @@ void execute_command(char **argv) {
 						if (out_mode)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
 						else if (*(argv + i + 1) == NULL)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
@@ -622,6 +639,7 @@ void execute_command(char **argv) {
 						if (output_fd == -1)
 						{
 							perror("Internal error: System call faliure: open(2)");
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
@@ -643,12 +661,14 @@ void execute_command(char **argv) {
 						if (out_mode)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
 						else if (*(argv + i + 1) == NULL)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
@@ -658,6 +678,7 @@ void execute_command(char **argv) {
 						if (append_fd == -1)
 						{
 							perror("Internal error: System call faliure: open(2)");
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
@@ -680,12 +701,14 @@ void execute_command(char **argv) {
 						if (err_mode)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
 						else if (*(argv + i + 1) == NULL)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
@@ -695,6 +718,7 @@ void execute_command(char **argv) {
 						if (error_fd == -1)
 						{
 							perror("Internal error: System call faliure: open(2)");
+							freeUpMem(&argv);
 							exit(EXIT_FAILURE);
 						}
 
@@ -716,7 +740,8 @@ void execute_command(char **argv) {
 			// Execute the command.
 			if (execvp(*argv, argv) == -1)
 			{
-				perror("Internal error: System call faliure: execvp(3)");
+				perror("execvp(3)");
+				freeUpMem(&argv);
 				shell_cleanup();
 				exit(EXIT_FAILURE);
 			}
@@ -758,11 +783,13 @@ void execute_command(char **argv) {
 		return;
 	}
 
+	// Case 2: Pipes with or without redirection.
 	pipes = (char ***)calloc(num_pipes + 1, sizeof(char **));
 
 	if (pipes == NULL)
 	{
 		perror("Internal error: System call faliure: calloc(3)");
+		freeUpMem(&argv);
 		shell_cleanup();
 		exit(EXIT_FAILURE);
 	}
@@ -783,6 +810,8 @@ void execute_command(char **argv) {
 			}
 
 			free(pipes);
+
+			freeUpMem(&argv);
 
 			shell_cleanup();
 			exit(EXIT_FAILURE);
@@ -814,6 +843,8 @@ void execute_command(char **argv) {
 		{
 			perror("Internal error: System call faliure: pipe(2)");
 
+			freeUpMem(&argv);
+
 			for (int k = 0; k < num_pipes + 1; ++k)
 				free(*(pipes + k));
 
@@ -836,10 +867,14 @@ void execute_command(char **argv) {
 		if (pid == -1)
 		{
 			perror("Internal error: System call faliure: fork(2)");
+
+			freeUpMem(&argv);
+
 			for (int k = 0; k < num_pipes + 1; ++k)
 				free(*(pipes + k));
 
 			free(pipes);
+
 			exit(EXIT_FAILURE);
 		}
 
@@ -853,14 +888,14 @@ void execute_command(char **argv) {
 
 			// Reset SIGINT to default.
 			signal(SIGINT, SIG_DFL);
-			
+
 			// If not last pipe, redirect stdout to the next pipe.
 			if (k < num_pipes)
 				dup2(pipe_fds[pipe_pos_h + 1], STDOUT_FILENO);
 
 			// If not first pipe, redirect stdin to the previous pipe.
 			if (pipe_pos_h != 0)
-				dup2(pipe_fds[pipe_pos_h-2], STDIN_FILENO);
+				dup2(pipe_fds[pipe_pos_h - 2], STDIN_FILENO);
 
 			// Close all unnecessary pipe handles.
 			for (int j = 0; j < num_pipes * 2; ++j)
@@ -885,12 +920,28 @@ void execute_command(char **argv) {
 							if (in_mode)
 							{
 								fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_IN_TWICE);
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
 							else if (*(curr_pipe + i + 1) == NULL)
 							{
 								fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
@@ -900,6 +951,14 @@ void execute_command(char **argv) {
 							if (input_fd == -1)
 							{
 								perror("Internal error: System call faliure: open(2)");
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
@@ -916,11 +975,19 @@ void execute_command(char **argv) {
 							*(*(pipes + k) + i) = NULL;
 						}
 
-						else if (strcmp(*(curr_pipe + i), ">") == 0 || 
-								strcmp(*(curr_pipe + i), ">>") == 0 || 
-								strcmp(*(curr_pipe + i), "2>") == 0)
+						else if (strcmp(*(curr_pipe + i), ">") == 0 ||
+								 strcmp(*(curr_pipe + i), ">>") == 0 ||
+								 strcmp(*(curr_pipe + i), "2>") == 0)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_IN_FIRST_PIPE);
+
+							freeUpMem(&argv);
+
+							for (int k = 0; k < num_pipes + 1; ++k)
+								free(*(pipes + k));
+
+							free(pipes);
+
 							exit(EXIT_FAILURE);
 						}
 					}
@@ -934,6 +1001,14 @@ void execute_command(char **argv) {
 						if (strcmp(*(curr_pipe + i), "<") == 0)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_IN_IN_LAST_PIPE);
+
+							freeUpMem(&argv);
+
+							for (int k = 0; k < num_pipes + 1; ++k)
+								free(*(pipes + k));
+
+							free(pipes);
+
 							exit(EXIT_FAILURE);
 						}
 
@@ -942,12 +1017,28 @@ void execute_command(char **argv) {
 							if (out_mode)
 							{
 								fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
 							else if (*(curr_pipe + i + 1) == NULL)
 							{
 								fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
@@ -957,6 +1048,14 @@ void execute_command(char **argv) {
 							if (output_fd == -1)
 							{
 								perror("Internal error: System call faliure: open(2)");
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
@@ -978,12 +1077,28 @@ void execute_command(char **argv) {
 							if (out_mode)
 							{
 								fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
 							else if (*(curr_pipe + i + 1) == NULL)
 							{
 								fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
@@ -993,6 +1108,14 @@ void execute_command(char **argv) {
 							if (append_fd == -1)
 							{
 								perror("Internal error: System call faliure: open(2)");
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
@@ -1014,12 +1137,28 @@ void execute_command(char **argv) {
 							if (err_mode)
 							{
 								fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_OUT_TWICE);
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
 							else if (*(curr_pipe + i + 1) == NULL)
 							{
 								fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_NO_FILE);
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
@@ -1029,6 +1168,14 @@ void execute_command(char **argv) {
 							if (error_fd == -1)
 							{
 								perror("Internal error: System call faliure: open(2)");
+
+								freeUpMem(&argv);
+
+								for (int k = 0; k < num_pipes + 1; ++k)
+									free(*(pipes + k));
+
+								free(pipes);
+
 								exit(EXIT_FAILURE);
 							}
 
@@ -1052,12 +1199,20 @@ void execute_command(char **argv) {
 				{
 					for (int i = 0; i < count_args_in_pipe; ++i)
 					{
-						if (strcmp(*(curr_pipe + i), "<") == 0 || 
-							strcmp(*(curr_pipe + i), ">") == 0 || 
-							strcmp(*(curr_pipe + i), ">>") == 0 || 
+						if (strcmp(*(curr_pipe + i), "<") == 0 ||
+							strcmp(*(curr_pipe + i), ">") == 0 ||
+							strcmp(*(curr_pipe + i), ">>") == 0 ||
 							strcmp(*(curr_pipe + i), "2>") == 0)
 						{
 							fprintf(stderr, "%s\n", SHELL_ERR_REDIRECT_BETWEEN_PIPES);
+
+							freeUpMem(&argv);
+
+							for (int k = 0; k < num_pipes + 1; ++k)
+								free(*(pipes + k));
+
+							free(pipes);
+
 							exit(EXIT_FAILURE);
 						}
 					}
@@ -1067,7 +1222,15 @@ void execute_command(char **argv) {
 			// Execute the command.
 			if (execvp(*curr_pipe, curr_pipe) == -1)
 			{
-				perror("Internal error: System call faliure: execvp(3)");
+				perror("execvp(3)");
+
+				freeUpMem(&argv);
+
+				for (int k = 0; k < num_pipes + 1; ++k)
+					free(*(pipes + k));
+
+				free(pipes);
+
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -1110,7 +1273,6 @@ void execute_command(char **argv) {
 	// Set the last status variable.
 	update_laststatus(cmd->status);
 
-	// Free the memory allocated for the pipes array.
 	for (int k = 0; k < num_pipes + 1; ++k)
 		free(*(pipes + k));
 

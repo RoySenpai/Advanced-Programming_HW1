@@ -22,22 +22,23 @@
 #include <stdbool.h>
 #include <string.h>
 
-char **tokenize_command(const char *command, int num_tokens) {
-    if (command == NULL)
-    {
-        fprintf(stderr, "Error: tokenize_command() failed: command is NULL\n");
-        return NULL;
-    }
+char **tokenize_command(const char *command, int num_tokens)
+{
+	if (command == NULL)
+	{
+		fprintf(stderr, "Error: tokenize_command() failed: command is NULL\n");
+		return NULL;
+	}
 
-    else if (num_tokens < 1)
-    {
-        fprintf(stderr, "Error: tokenize_command() failed: num_tokens is less than 1\n");
-        return NULL;
-    }
+	else if (num_tokens < 1)
+	{
+		fprintf(stderr, "Error: tokenize_command() failed: num_tokens is less than 1\n");
+		return NULL;
+	}
 
-    char **tokens = (char **)calloc(num_tokens + 1, sizeof(char *));
-    bool in_quotes = false;
-    int token_length = 0;
+	char **tokens = (char **)calloc(num_tokens + 1, sizeof(char *));
+	bool in_quotes = false;
+	int token_length = 0;
 	int word = 0;
 
 	if (tokens == NULL)
@@ -46,164 +47,176 @@ char **tokenize_command(const char *command, int num_tokens) {
 		return NULL;
 	}
 
-    char *token = (char *)calloc(strlen(command) + 1, sizeof(char));
+	char *token = (char *)calloc(strlen(command) + 1, sizeof(char));
 
-    if (token == NULL)
-    {
-        perror("Internal error: System call faliure: calloc(3)");
-        free(tokens);
-        return NULL;
-    }
-
-    for (int i = 0; *(command + i) != '\0'; i++)
+	if (token == NULL)
 	{
-        if (*(command + i) == '"')
-            in_quotes = !in_quotes;
-        
+		perror("Internal error: System call faliure: calloc(3)");
+		free(tokens);
+		return NULL;
+	}
+
+	for (int i = 0; *(command + i) != '\0'; i++)
+	{
+		if (*(command + i) == '"')
+			in_quotes = !in_quotes;
+
 		else if (*(command + i) == ' ' && !in_quotes)
 		{
-            *(token + token_length) = '\0';
-            *(tokens + word) = token;
-			
-            token = (char *)calloc(strlen(command) + 1, sizeof(char));
+			*(token + token_length) = '\0';
+			*(tokens + word) = token;
+
+			token = (char *)calloc(strlen(command) + 1, sizeof(char));
 
 			if (token == NULL)
 			{
 				perror("Internal error: System call faliure: calloc(3)");
 
-                for (int j = 0; j < word; j++)
-                    free(*(tokens + j));
-                
+				for (int j = 0; j < word; j++)
+					free(*(tokens + j));
+
 				return NULL;
 			}
 
 			word++;
 
-            token_length = 0;
-        }
-        
+			token_length = 0;
+		}
+
 		else
 		{
-            *(token + token_length) = *(command + i);
-            token_length++;
-        }
-    }
+			*(token + token_length) = *(command + i);
+			token_length++;
+		}
+	}
 
-    *(token + token_length) = '\0';
-    *(tokens + word) = token;
+	*(token + token_length) = '\0';
+	*(tokens + word) = token;
 
-    if (strcmp(*(tokens + word), "&") == 0)
-    {
-        free(*(tokens + word));
-        *(tokens + word) = NULL;
-    }
+	if (strcmp(*(tokens + word), "&") == 0)
+	{
+		free(*(tokens + word));
+		*(tokens + word) = NULL;
+	}
 
 	// Set the last argument to NULL, as required by execvp.
 	*(tokens + num_tokens) = NULL;
 
-    return tokens;
+	return tokens;
 }
 
-void parse_variables(char ***cmd, PLinkedList variableList) {
-    if (cmd == NULL || *cmd == NULL)
-    {
-        fprintf(stderr, "Error: parse_variables() failed: command is NULL\n");
-        return;
-    }
+void parse_variables(char ***cmd, PLinkedList variableList)
+{
+	if (cmd == NULL || *cmd == NULL)
+	{
+		fprintf(stderr, "Error: parse_variables() failed: command is NULL\n");
+		return;
+	}
 
-    else if (variableList == NULL)
-    {
-        fprintf(stderr, "Error: parse_variables() failed: variableList is NULL\n");
-        return;
-    }
+	else if (variableList == NULL)
+	{
+		fprintf(stderr, "Error: parse_variables() failed: variableList is NULL\n");
+		return;
+	}
 
-    // If no variables are defined, return, we have nothing to do. :(
-    if (variableList->head == NULL)
-        return;
+	// If no variables are defined, return, we have nothing to do. :(
+	if (variableList->head == NULL)
+		return;
 
-    char **command = *cmd;
+	char **command = *cmd;
 
-    for (int i = 0; *(command + i) != NULL; i++)
-    {
-        if (**(command + i) == '$')
-        {
-            char *variable_name = *(command + i) + 1;
-            PNode variable = (PNode)variableList->head;
-            PVariable variable_data = NULL;
+	for (int i = 0; *(command + i) != NULL; i++)
+	{
+		if (**(command + i) == '$')
+		{
+			char *variable_name = *(command + i) + 1;
+			PNode variable = (PNode)variableList->head;
+			PVariable variable_data = NULL;
 
-            while (variable != NULL)
-            {
-                variable_data = (PVariable)variable->data;
+			while (variable != NULL)
+			{
+				variable_data = (PVariable)variable->data;
 
-                if (strcmp(variable_data->name, variable_name) == 0)
-                    break;
+				if (strcmp(variable_data->name, variable_name) == 0)
+					break;
 
-                variable = variable->next;
-            }
+				variable = variable->next;
+			}
 
-            // Variable not found, don't parse it.
-            if (variable == NULL)
-                return;
+			// Variable not found, don't parse it.
+			if (variable == NULL)
+				return;
 
-            char *tmp = (char *)calloc(strlen(variable_data->value) + 1, sizeof(char));
+			char *tmp = (char *)calloc(strlen(variable_data->value) + 1, sizeof(char));
 
-            if (tmp == NULL)
-            {
-                perror("Internal error: System call faliure: calloc(3)");
-                return;
-            }
+			if (tmp == NULL)
+			{
+				perror("Internal error: System call faliure: calloc(3)");
+				return;
+			}
 
-            free(*(command + i));
-            strcpy(tmp, variable_data->value);
+			free(*(command + i));
+			strcpy(tmp, variable_data->value);
 
-            *(command + i) = tmp;
-        }
-    }
+			*(command + i) = tmp;
+		}
+	}
 }
 
-int is_control_command(const char *cmd) {
-    if (cmd == NULL)
-    {
-        fprintf(stderr, "Error: is_control_command() failed: cmd is NULL\n");
-        return 0;
-    }
+int is_control_command(const char *cmd)
+{
+	if (cmd == NULL)
+	{
+		fprintf(stderr, "Error: is_control_command() failed: cmd is NULL\n");
+		return 0;
+	}
 
-    return (strcmp(cmd, "if") == 0 || strcmp(cmd, "then") == 0 || strcmp(cmd, "else") == 0 || strcmp(cmd, "fi") == 0);
+	return (strcmp(cmd, "if") == 0 || strcmp(cmd, "then") == 0 || strcmp(cmd, "else") == 0 || strcmp(cmd, "fi") == 0);
 }
 
-int ok_to_execute(State curr_state, Result curr_result) {
-    int ret = 1;
+int ok_to_execute(State curr_state, Result curr_result)
+{
+	int ret = 1;
 
-    if (curr_state == STATE_WANT_THEN)
-    {
-        fprintf(stderr, "Shell internal error: syntax error: then expected\n");
-        ret = 0;
-    }
+	if (curr_state == STATE_WANT_THEN)
+	{
+		fprintf(stderr, "Shell internal error: syntax error: then expected\n");
+		ret = 0;
+	}
 
-    else if (curr_state == STATE_THEN_BLOCK && curr_result == Success)
-        ret = 1;
+	else if (curr_state == STATE_THEN_BLOCK && curr_result == Success)
+		ret = 1;
 
-    else if (curr_state == STATE_THEN_BLOCK && curr_result == Failure)
-        ret = 0;
+	else if (curr_state == STATE_THEN_BLOCK && curr_result == Failure)
+		ret = 0;
 
-    else if (curr_state == STATE_ELSE_BLOCK && curr_result == Success)
-        ret = 0;
+	else if (curr_state == STATE_ELSE_BLOCK && curr_result == Success)
+		ret = 0;
 
-    else if (curr_state == STATE_ELSE_BLOCK && curr_result == Failure)
-        ret = 1;
+	else if (curr_state == STATE_ELSE_BLOCK && curr_result == Failure)
+		ret = 1;
 
-    return ret;
+	return ret;
 }
 
-void freeUpMem( char **argv){
-    // Free the memory allocated for the arguments array.
-    char **tmp = argv;
+void freeUpMem(char ***argv)
+{
+	char **tmp = *argv;
 
-    while (*tmp != NULL)
-    {
-        free(*tmp);
-        ++tmp;
-    }
+	// Sanity check.
+	if (tmp == NULL)
+		return;
 
-    free(argv);
+	while (*tmp != NULL)
+	{
+		free(*tmp);
+
+		// Nullify the pointer to avoid double free.
+		*tmp = NULL;
+
+		++tmp;
+	}
+
+	free(*argv);
+	*argv = NULL;
 }
