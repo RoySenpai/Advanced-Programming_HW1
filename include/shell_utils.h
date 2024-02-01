@@ -62,5 +62,7 @@ int is_control_command(const char *cmd);
  */
 int ok_to_execute(State curr_state, Result curr_result);
 
+void freeUpMem( char **argv);
+
 
 #endif // _SHELL_UTILS_H

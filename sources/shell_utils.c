@@ -194,3 +194,16 @@ int ok_to_execute(State curr_state, Result curr_result) {
 
     return ret;
 }
+
+void freeUpMem( char **argv){
+    // Free the memory allocated for the arguments array.
+    char **tmp = argv;
+
+    while (*tmp != NULL)
+    {
+        free(*tmp);
+        ++tmp;
+    }
+
+    free(argv);
+}

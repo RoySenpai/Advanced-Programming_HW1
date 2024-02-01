@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+
 // Global variables section
 
 // Home directory
@@ -265,6 +266,7 @@ CommandType parse_command(char *command, char ***argv) {
 			if (shell_state != STATE_NETURAL)
 			{
 				fprintf(stderr, "Shell internal error: syntax error: if unexpected\n");
+                freeUpMem(*argv);
 				return Internal;
 			}
 
@@ -292,11 +294,13 @@ CommandType parse_command(char *command, char ***argv) {
 			if (words > 1 || shell_state != STATE_WANT_THEN)
 			{
 				fprintf(stderr, "Shell internal error: syntax error: then unexpected\n");
+                freeUpMem(*argv);
 				return Internal;
 			}
 
 			shell_state = STATE_THEN_BLOCK;
 
+            freeUpMem(*argv);
 			return Internal;
 		}
 
@@ -310,8 +314,8 @@ CommandType parse_command(char *command, char ***argv) {
 			}
 
 			shell_state = STATE_ELSE_BLOCK;
-
-			return Internal;
+            freeUpMem(*argv);
+            return Internal;
 		}
 
 		// Finish control command. Reset shell state.
@@ -324,8 +328,8 @@ CommandType parse_command(char *command, char ***argv) {
 			}
 
 			shell_state = STATE_NETURAL;
-
-			return Internal;
+            freeUpMem(*argv);
+            return Internal;
 		}
 	}
 
@@ -382,7 +386,8 @@ CommandType parse_command(char *command, char ***argv) {
 		cmd->isInternal = true;
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-		return Internal;
+        freeUpMem(*argv);
+        return Internal;
 	}
 
 	// Clean screen command.
@@ -392,7 +397,8 @@ CommandType parse_command(char *command, char ***argv) {
 		cmd->isInternal = true;
 		cmd->status = 0;
 		update_laststatus(0);
-		return Internal;
+        freeUpMem(*argv);
+        return Internal;
 	}
 
 	// Print working directory command.
@@ -402,7 +408,8 @@ CommandType parse_command(char *command, char ***argv) {
 		cmd->isInternal = true;
 		cmd->status = 0;
 		update_laststatus(0);
-		return Internal;
+        freeUpMem(*argv);
+        return Internal;
 	}
 
 	// Change prompt command.
@@ -416,7 +423,8 @@ CommandType parse_command(char *command, char ***argv) {
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
 			cmd->status = 1;
 			update_laststatus(1);
-			return Internal;
+            freeUpMem(*argv);
+            return Internal;
 		}
 
 		// Check if the syntax is correct.
@@ -425,13 +433,15 @@ CommandType parse_command(char *command, char ***argv) {
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_CHANGE_PROMPT_SYNTAX);
 			cmd->status = 1;
 			update_laststatus(1);
-			return Internal;
+            freeUpMem(*argv);
+            return Internal;
 		}
 
 		Result res = cmdChangePrompt(*(pargv + 2));
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-		return Internal;
+        freeUpMem(*argv);
+        return Internal;
 	}
 
 	// History command.
@@ -441,7 +451,8 @@ CommandType parse_command(char *command, char ***argv) {
 		Result res = cmdHistory(words);
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-		return Internal;
+        freeUpMem(*argv);
+        return Internal;
 	}
 
 	// Read command.
@@ -451,7 +462,8 @@ CommandType parse_command(char *command, char ***argv) {
 		Result res = cmdRead(*(pargv + 1));
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-		return Internal;
+        freeUpMem(*argv);
+        return Internal;
 	}
 
     // !! command. cmdrepeatLastCommand
@@ -460,6 +472,7 @@ CommandType parse_command(char *command, char ***argv) {
         Result res = cmdrepeatLastCommand();
         cmd->status = (res == Success) ? 0 : 1;
         update_laststatus(cmd->status);
+        freeUpMem(*argv);
         return Internal;
     }
 
@@ -473,7 +486,8 @@ CommandType parse_command(char *command, char ***argv) {
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_SET_SYNTAX);
 			cmd->status = 1;
 			update_laststatus(1);
-			return Internal;
+            freeUpMem(*argv);
+            return Internal;
 		}
 
 		else if (strcmp(*(pargv + 1), "=") != 0)
@@ -481,19 +495,23 @@ CommandType parse_command(char *command, char ***argv) {
 			fprintf(stderr, "%s\n", SHELL_ERR_CMD_SET_SYNTAX);
 			cmd->status = 1;
 			update_laststatus(1);
-			return Internal;
+            freeUpMem(*argv);
+            return Internal;
 		}
 
 		Result res = setVariable(*(pargv + 0) + 1, *(pargv + 2));
 		cmd->status = (res == Success) ? 0 : 1;
 		update_laststatus(cmd->status);
-		return Internal;
+        freeUpMem(*argv);
+        return Internal;
 	}
 
 	// Check if the command is a background command.
 	if (*(command + strlen(command) - 1) == '&')
 		cmd->background = true;
 
+    // Before returning, free the memory allocated for the arguments array.
+    freeUpMem(*argv);
 	// This is an external command.
 	return External;
 }
