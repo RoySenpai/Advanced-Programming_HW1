@@ -348,7 +348,101 @@ CommandType parse_command(char *command, char ***argv) {
 		return Internal;
 	}
 
-	// Set Variable command.
+    // !! command. cmdrepeatLastCommand
+    else if (strcmp(*pargv, "!!") == 0) {
+        cmd->isInternal = true;
+        Result res = cmdrepeatLastCommand();
+        cmd->status = (res == Success) ? 0 : 1;
+        update_laststatus(cmd->status);
+        return Internal;
+    }
+
+    // Check for 'if' command
+    if (strncmp(command, "if", 2) == 0) {
+        bool conditionMet = false;
+        bool inThenBlock = false;
+        bool inElseBlock = false;
+        char conditionCommand[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
+        char thenCommands[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
+        char elseCommands[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
+
+        // Copy the condition part of the command
+        strncpy(conditionCommand, command + 3, SHELL_MAX_COMMAND_LENGTH);
+
+        // Read and execute the condition
+        int conditionStatus = 0; // Variable to store the exit status of the condition command
+        pid_t pid = fork();
+        if (pid == 0) {
+            // Child process
+            char **condArgv = NULL;
+            parse_command(conditionCommand, &condArgv);  // Assume this fills condArgv appropriately
+
+            if (execvp(condArgv[0], condArgv) == -1) {
+                perror("execvp");
+                exit(EXIT_FAILURE);  // Exit with a failure status if execvp fails
+            }
+
+            // Free allocated memory for arguments in child process (if parse_command allocates memory)
+            for (size_t k = 0; *(condArgv + k) != NULL; ++k) {
+                free(*(condArgv + k));
+            }
+            free(condArgv);
+
+        } else if (pid < 0) {
+            // Forking failed
+            perror("fork");
+            conditionStatus = -1;  // Set an error status
+        } else {
+            // Parent process
+            int status;
+            waitpid(pid, &status, 0);  // Wait for the child process to finish
+
+            if (WIFEXITED(status)) {
+                conditionStatus = WEXITSTATUS(status);  // Capture the exit status of the child process
+            } else {
+                conditionStatus = -1;  // Set an error status if the child didn't exit normally
+            }
+        }
+
+        conditionMet = (conditionStatus == 0);  // Assuming 0 is success
+
+        // Continue reading commands until 'fi' is encountered
+        while (fgets(command, SHELL_MAX_COMMAND_LENGTH, stdin) != NULL) {
+            // Remove newline character
+            command[strcspn(command, "\n")] = 0;
+
+            if (strncmp(command, "then", 4) == 0) {
+                inThenBlock = true;
+                inElseBlock = false;
+                continue;
+            } else if (strncmp(command, "else", 4) == 0) {
+                inThenBlock = false;
+                inElseBlock = true;
+                continue;
+            } else if (strncmp(command, "fi", 2) == 0) {
+                break;  // End of if/else block
+            }
+
+            if (inThenBlock && conditionMet) {
+                strcat(thenCommands, command);
+                strcat(thenCommands, "; ");  // Assuming commands are separated by ";"
+            } else if (inElseBlock && !conditionMet) {
+                strcat(elseCommands, command);
+                strcat(elseCommands, "; ");
+            }
+        }
+
+        // Execute then or else block based on the condition
+        if (conditionMet) {
+            system(thenCommands);  // Using system for simplicity
+        } else {
+            system(elseCommands);
+        }
+
+        return Internal;  // Mark as an internal command block
+    }
+
+    // Set Variable command.
 	else if (*command == '$')
 	{
 		cmd->isInternal = true;
