@@ -17,6 +17,7 @@
 */
 
 #include "../include/shell_internal_cmds.h"
+#include "../include/shell.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -118,8 +119,8 @@ Result cmdrepeatLastCommand() {
 
     // Resend the last command to the parser and executor
     char **argv = NULL;
-//    parse_command(lastCommand->command, &argv);
-//    execute_command(argv);
+    parse_command(lastCommand->command, &argv);
+    execute_command(argv);
 
     // Free argv after execution
     for (size_t k = 0; *(argv + k) != NULL; ++k) {
