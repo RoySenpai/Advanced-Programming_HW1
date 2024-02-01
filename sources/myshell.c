@@ -49,6 +49,8 @@ PLinkedList commandHistory;
 // Variable list
 PLinkedList variableList;
 
+// Shell state
+State shell_state = STATE_NETURAL;
 
 // Main function section
 int main() {
@@ -57,9 +59,6 @@ int main() {
 
 	// Arguments array
 	char **argv = NULL;
-
-	// Number of arguments
-	int count_args = 0;
 
 	// Get home directory
 	homedir = getenv("HOME");
@@ -129,19 +128,16 @@ int main() {
 		if (parse_command(command, &argv) == Internal)
 			continue;
 
-		// Count the number of arguments.
-		count_args = 0;
-		for (size_t k = 0; *(argv + k) != NULL; ++k)
-			++count_args;
-
 		// Execute command
 		execute_command(argv);
 
 		// Free the memory allocated for the arguments array.
-		for (int k = 0; k < count_args; ++k)
+		char **tmp = argv;
+
+		while (*tmp != NULL)
 		{
-			if (*(argv + k) != NULL)
-				free(*(argv + k));
+			free(*tmp);
+			++tmp;
 		}
 
 		free(argv);
@@ -222,6 +218,7 @@ void shell_cleanup() {
 CommandType parse_command(char *command, char ***argv) {
 	int words = 1;
 	bool inQuotes = false;
+	Result curr_res = Success;
 
 	// Remove the newline character from the command, to check if it's empty.
 	command = strtok(command, "\n");
@@ -258,7 +255,97 @@ CommandType parse_command(char *command, char ***argv) {
 	}
 
 	// Parse the variables.
-	parse_variables(pargv, variableList);
+	parse_variables(&pargv, variableList);
+
+	if (is_control_command(*pargv))
+	{
+		// If control command, check if it's valid.
+		if (strcmp(*pargv, "if") == 0)
+		{
+			if (shell_state != STATE_NETURAL)
+			{
+				fprintf(stderr, "Shell internal error: syntax error: if unexpected\n");
+				return Internal;
+			}
+
+			shell_state = STATE_WANT_THEN;
+
+			// Free the first argument, which is the if command.
+			free(*pargv);
+
+			// Shift the arguments array to the left by one.
+			char **tmp = pargv;
+			while (*tmp != NULL)
+			{
+				*tmp = *(tmp + 1);
+				++tmp;
+			}
+
+			// Free the last argument, which is now NULL.
+			free(*(pargv + words - 1));
+			*(pargv + words - 1) = NULL;
+		}
+
+		// Then command must be after if command.
+		else if (strcmp(*pargv, "then") == 0)
+		{
+			if (words > 1 || shell_state != STATE_WANT_THEN)
+			{
+				fprintf(stderr, "Shell internal error: syntax error: then unexpected\n");
+				return Internal;
+			}
+
+			shell_state = STATE_THEN_BLOCK;
+
+			return Internal;
+		}
+
+		// Else command must be after the then command block.
+		else if (strcmp(*pargv, "else") == 0)
+		{
+			if (words > 1 || shell_state != STATE_THEN_BLOCK)
+			{
+				fprintf(stderr, "Shell internal error: syntax error: else unexpected\n");
+				return Internal;
+			}
+
+			shell_state = STATE_ELSE_BLOCK;
+
+			return Internal;
+		}
+
+		// Finish control command. Reset shell state.
+		else if (strcmp(*pargv, "fi") == 0)
+		{
+			if (words > 1 || (shell_state != STATE_THEN_BLOCK && shell_state != STATE_ELSE_BLOCK))
+			{
+				fprintf(stderr, "Shell internal error: syntax error: fi unexpected\n");
+				return Internal;
+			}
+
+			shell_state = STATE_NETURAL;
+
+			return Internal;
+		}
+	}
+
+	// We want to check if its ok to execute the command if we are in then or else block.
+	if (commandHistory->tail != NULL && shell_state != STATE_WANT_THEN && shell_state != STATE_NETURAL)
+	{
+		PCommand lastCommand = (PCommand)(commandHistory->tail->data);
+
+		curr_res = (lastCommand->status ? Failure:Success);
+
+		if (!ok_to_execute(shell_state, curr_res))
+			return Internal;
+	}
+
+	// If we expect "then" and we got a command, it's a syntax error.
+	else if (shell_state == STATE_WANT_THEN && strncmp(command, "if", 2) != 0)
+	{
+		fprintf(stderr, "Shell internal error: syntax error: then expected\n");
+		return Internal;
+	}
 
 	// Add the command to the command history.
 	PCommand cmd = create_command(command, false, false);
@@ -374,91 +461,6 @@ CommandType parse_command(char *command, char ***argv) {
         cmd->status = (res == Success) ? 0 : 1;
         update_laststatus(cmd->status);
         return Internal;
-    }
-
-    // Check for 'if' command
-    if (strncmp(command, "if", 2) == 0) {
-        bool conditionMet = false;
-        bool inThenBlock = false;
-        bool inElseBlock = false;
-        char conditionCommand[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
-        char thenCommands[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
-        char elseCommands[SHELL_MAX_COMMAND_LENGTH + 1] = {0};
-
-        // Copy the condition part of the command
-        strncpy(conditionCommand, command + 3, SHELL_MAX_COMMAND_LENGTH);
-
-        // Read and execute the condition
-        int conditionStatus = 0; // Variable to store the exit status of the condition command
-        pid_t pid = fork();
-        if (pid == 0) {
-            // Child process
-            char **condArgv = NULL;
-            parse_command(conditionCommand, &condArgv);  // Assume this fills condArgv appropriately
-
-            if (execvp(condArgv[0], condArgv) == -1) {
-                perror("execvp");
-                exit(EXIT_FAILURE);  // Exit with a failure status if execvp fails
-            }
-
-            // Free allocated memory for arguments in child process (if parse_command allocates memory)
-            for (size_t k = 0; *(condArgv + k) != NULL; ++k) {
-                free(*(condArgv + k));
-            }
-            free(condArgv);
-
-        } else if (pid < 0) {
-            // Forking failed
-            perror("fork");
-            conditionStatus = -1;  // Set an error status
-        } else {
-            // Parent process
-            int status;
-            waitpid(pid, &status, 0);  // Wait for the child process to finish
-
-            if (WIFEXITED(status)) {
-                conditionStatus = WEXITSTATUS(status);  // Capture the exit status of the child process
-            } else {
-                conditionStatus = -1;  // Set an error status if the child didn't exit normally
-            }
-        }
-
-        conditionMet = (conditionStatus == 0);  // Assuming 0 is success
-
-        // Continue reading commands until 'fi' is encountered
-        while (fgets(command, SHELL_MAX_COMMAND_LENGTH, stdin) != NULL) {
-            // Remove newline character
-            command[strcspn(command, "\n")] = 0;
-
-            if (strncmp(command, "then", 4) == 0) {
-                inThenBlock = true;
-                inElseBlock = false;
-                continue;
-            } else if (strncmp(command, "else", 4) == 0) {
-                inThenBlock = false;
-                inElseBlock = true;
-                continue;
-            } else if (strncmp(command, "fi", 2) == 0) {
-                break;  // End of if/else block
-            }
-
-            if (inThenBlock && conditionMet) {
-                strcat(thenCommands, command);
-                strcat(thenCommands, "; ");  // Assuming commands are separated by ";"
-            } else if (inElseBlock && !conditionMet) {
-                strcat(elseCommands, command);
-                strcat(elseCommands, "; ");
-            }
-        }
-
-        // Execute then or else block based on the condition
-        if (conditionMet) {
-            system(thenCommands);  // Using system for simplicity
-        } else {
-            system(elseCommands);
-        }
-
-        return Internal;  // Mark as an internal command block
     }
 
     // Set Variable command.
@@ -724,15 +726,12 @@ void execute_command(char **argv) {
 			// Wait for the child process to finish.
 			wait(&status);
 
-			int high_8, low_7, bit_7;
+			int high_8, bit_7;
 			high_8 = status >> 8;
-			low_7 = status & 0x7F;
 			bit_7 = status & 0x80;
 
-			fprintf(stdout, "status: exit=%d, sig=%d, core=%d\n", high_8, low_7, bit_7); 
-
 			// Update the command history.
-			cmd->status = (high_8 == 0 && bit_7 == 0) ? 0 : 1;
+			cmd->status = (high_8 == 0 && bit_7 == 0) ? 0 : high_8;
 
 			// Set the last status variable.
 			update_laststatus(cmd->status);
@@ -1083,15 +1082,12 @@ void execute_command(char **argv) {
 	for (int i = 0; i < num_pipes + 1; ++i)
 		wait(&status);
 
-	int high_8, low_7, bit_7;
+	int high_8, bit_7;
 	high_8 = status >> 8;
-	low_7 = status & 0x7F;
 	bit_7 = status & 0x80;
 
-	fprintf(stdout, "status: exit=%d, sig=%d, core=%d\n", high_8, low_7, bit_7);
-
 	// Update the command history.
-	cmd->status = (high_8 == 0 && bit_7 == 0) ? 0 : 1;
+	cmd->status = (high_8 == 0 && bit_7 == 0) ? 0 : high_8;
 
 	// Set the last status variable.
 	update_laststatus(cmd->status);

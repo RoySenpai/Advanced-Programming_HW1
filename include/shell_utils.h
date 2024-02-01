@@ -45,7 +45,22 @@ char **tokenize_command(const char *command, int num_tokens);
  * @param command The command to parse.
  * @param variableList The list of variables.
  */
-void parse_variables(char **command, PLinkedList variableList);
+void parse_variables(char ***command, PLinkedList variableList);
+
+/*
+ * @brief Check if a command is a control command (if, then, else, fi).
+ * @param cmd The command to check.
+ * @return 1 if the command is a control command, 0 otherwise.
+ */
+int is_control_command(const char *cmd);
+
+/*
+ * @brief Checks if we can execute a command.
+ * @param curr_state The current state of the shell.
+ * @param curr_result The current result of the shell.
+ * @return 1 if we can execute the command, 0 otherwise.
+ */
+int ok_to_execute(State curr_state, Result curr_result);
 
 
 #endif // _SHELL_UTILS_H

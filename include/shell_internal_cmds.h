@@ -101,13 +101,4 @@ Result cmdRead(char *variableName);
  */
 Result cmdHistory(int argc);
 
-/*
- * @brief Execute if-else command.
- * @param condition The condition to check.
- * @param thenCmd The command to execute if the condition is true.
- * @param elseCmd The command to execute if the condition is false.
- * @return Success if the command succeeded, Failure otherwise.
- */
-Result cmdIfElse(char *condition, char *thenCmd, char *elseCmd);
-
 #endif /* _SHELL_CD_H */

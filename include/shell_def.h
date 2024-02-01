@@ -230,9 +230,48 @@ typedef enum _CommandType
  */
 typedef enum _Result
 {
+	/*
+	 * @brief Success result.
+	*/
 	Success = 0,
+
+	/*
+	 * @brief Failure result.
+	*/
 	Failure = 1
 } Result;
+
+/*
+ * @brief State enum.
+ * @note Used to indicate the current state of the shell.
+ */
+typedef enum _State {
+	/*
+	 * @brief Neutral state.
+	*/
+    STATE_NETURAL = 0,
+
+	/*
+	 * @brief Want then state. Indicates that the shell is waiting for a then command.
+	 * @note State is changed to this when an if command is encountered.
+	 * @attention If no then command is encountered, it will be considered as a syntax error.
+	*/
+    STATE_WANT_THEN = 1,
+
+	/*
+	 * @brief Then block state. Indicates that the shell is in a then block.
+	 * @note State is changed to this when a then command is encountered.
+	 * @note On else or fi commands, the state is changed.
+	*/
+    STATE_THEN_BLOCK,
+
+	/*
+	 * @brief Else block state. Indicates that the shell is in an else block.
+	 * @note State is changed to this when an else command is encountered.
+	 * @note On fi command, the state is changed back to neutral.
+	*/
+    STATE_ELSE_BLOCK
+} State;
 
 /***********************************/
 /* Internal Settings for the shell */

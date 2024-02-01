@@ -214,19 +214,3 @@ Result cmdHistory(int argc) {
 
     return Success;
 }
-
-Result cmdIfElse(char *condition, char *thenCmd, char *elseCmd) {
-    int status = system(condition); // Execute the condition command
-
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
-        // Condition succeeded, execute thenCmd
-        system(thenCmd);
-    } else {
-        // Condition failed, execute elseCmd
-        if (elseCmd != NULL) {
-            system(elseCmd);
-        }
-    }
-
-    return Success;
-}

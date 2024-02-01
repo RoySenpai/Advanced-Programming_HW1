@@ -104,8 +104,8 @@ char **tokenize_command(const char *command, int num_tokens) {
     return tokens;
 }
 
-void parse_variables(char **command, PLinkedList variableList) {
-    if (command == NULL)
+void parse_variables(char ***cmd, PLinkedList variableList) {
+    if (cmd == NULL || *cmd == NULL)
     {
         fprintf(stderr, "Error: parse_variables() failed: command is NULL\n");
         return;
@@ -120,6 +120,8 @@ void parse_variables(char **command, PLinkedList variableList) {
     // If no variables are defined, return, we have nothing to do. :(
     if (variableList->head == NULL)
         return;
+
+    char **command = *cmd;
 
     for (int i = 0; *(command + i) != NULL; i++)
     {
@@ -157,4 +159,38 @@ void parse_variables(char **command, PLinkedList variableList) {
             *(command + i) = tmp;
         }
     }
+}
+
+int is_control_command(const char *cmd) {
+    if (cmd == NULL)
+    {
+        fprintf(stderr, "Error: is_control_command() failed: cmd is NULL\n");
+        return 0;
+    }
+
+    return (strcmp(cmd, "if") == 0 || strcmp(cmd, "then") == 0 || strcmp(cmd, "else") == 0 || strcmp(cmd, "fi") == 0);
+}
+
+int ok_to_execute(State curr_state, Result curr_result) {
+    int ret = 1;
+
+    if (curr_state == STATE_WANT_THEN)
+    {
+        fprintf(stderr, "Shell internal error: syntax error: then expected\n");
+        ret = 0;
+    }
+
+    else if (curr_state == STATE_THEN_BLOCK && curr_result == Success)
+        ret = 1;
+
+    else if (curr_state == STATE_THEN_BLOCK && curr_result == Failure)
+        ret = 0;
+
+    else if (curr_state == STATE_ELSE_BLOCK && curr_result == Success)
+        ret = 0;
+
+    else if (curr_state == STATE_ELSE_BLOCK && curr_result == Failure)
+        ret = 1;
+
+    return ret;
 }
